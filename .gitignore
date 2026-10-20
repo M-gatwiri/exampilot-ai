@@ -1,11 +1,26 @@
-# Python / Django
-venv/
+# Python / Django / Virtual Environments
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/db.sqlite3
+backend/.env
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+# General OS & Editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+
+# Python cache
 __pycache__/
 *.pyc
-db.sqlite3
-.env
-
-# Node / React
-node_modules/
-dist/
-.DS_Store
+*.pyo
+*.pyd
+.venv/
+venv/
