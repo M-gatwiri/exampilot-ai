@@ -1,3 +1,50 @@
 from django.db import models
+from django.contrib.auth.models import User
 
-# Create your models here.
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Profile for {self.user.username}"
+
+
+class Question(models.Model):
+    DOMAIN_CHOICES = [
+        ('cloud_concepts', 'Cloud Concepts'),
+        ('azure_architecture', 'Azure Architecture & Services'),
+        ('management_governance', 'Azure Management & Governance'),
+    ]
+
+    domain = models.CharField(max_length=50, choices=DOMAIN_CHOICES)
+    question_text = models.TextField()
+    options = models.JSONField(help_text="Store choices as a JSON array/object")
+    correct_answer = models.CharField(max_length=255)
+    explanation = models.TextField()
+    is_ai_generated = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.domain}] {self.question_text[:50]}..."
+
+
+class QuizAttempt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
+    score = models.IntegerField()
+    total_questions = models.IntegerField()
+    domain_breakdown = models.JSONField(default=dict, help_text="Tracks performance score per domain")
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - Score: {self.score}/{self.total_questions}"
+
+
+class Flashcard(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='flashcards', null=True, blank=True)
+    front_concept = models.CharField(max_length=255)
+    back_explanation = models.TextField()
+    domain = models.CharField(max_length=50)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Flashcard: {self.front_concept}"
