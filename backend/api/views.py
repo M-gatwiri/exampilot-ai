@@ -105,6 +105,84 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
     queryset = QuizAttempt.objects.all()
     serializer_class = QuizAttemptSerializer
 
+    @action(detail=False, methods=['post'])
+    def submit_quiz(self, request):
+        """
+        Calculates score for submitted answers and saves a QuizAttempt.
+        Payload: { "user_profile_id": 1, "answers": { "question_id_1": "A", "question_id_2": "C" } }
+        """
+        user_id = request.data.get('user_profile_id')
+        submitted_answers = request.data.get('answers', {})  # Dict of {question_id: selected_option}
+        
+        total_questions = len(submitted_answers)
+        if total_questions == 0:
+            return Response({"error": "No answers provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+        correct_count = 0
+        for q_id, chosen_option in submitted_answers.items():
+            try:
+                question = Question.objects.get(pk=q_id)
+                if question.correct_answer.strip().upper() == chosen_option.strip().upper():
+                    correct_count += 1
+            except Question.DoesNotExist:
+                continue
+
+        score_percentage = (correct_count / total_questions) * 100
+
+        # Retrieve user profile if provided
+        user_profile = None
+        if user_id:
+            try:
+                user_profile = UserProfile.objects.get(pk=user_id)
+            except UserProfile.DoesNotExist:
+                pass
+
+        # Save the attempt
+        attempt = QuizAttempt.objects.create(
+            user=user_profile,
+            score=score_percentage
+        )
+
+        return Response({
+            "total_questions": total_questions,
+            "correct_answers": correct_count,
+            "score": score_percentage,
+            "attempt_id": attempt.id
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'])
+    def generate_insights(self, request):
+        """
+        Uses Groq to analyze recent quiz performance and give study recommendations.
+        Payload: { "topic_scores": { "Cloud Concepts": 50, "Azure Pricing": 80 } }
+        """
+        topic_scores = request.data.get('topic_scores', {})
+        
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            return Response(
+                {"error": "Groq API key not configured on backend."}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        client = Groq(api_key=api_key)
+        prompt = f"""
+        Analyze these AZ-900 exam practice scores by topic: {topic_scores}.
+        Provide constructive learning insights, highlight weak areas, and offer 3 bullet-point study recommendations for the Azure Fundamentals exam. Keep it concise and encouraging.
+        """
+
+        try:
+            chat_completion = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="openai/gpt-oss-20b",
+            )
+            
+            insights = chat_completion.choices[0].message.content.strip()
+            return Response({"insights": insights}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
 class FlashcardViewSet(viewsets.ModelViewSet):
     queryset = Flashcard.objects.all()
     serializer_class = FlashcardSerializer
