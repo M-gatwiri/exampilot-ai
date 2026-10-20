@@ -2,12 +2,13 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    supabase_uid = models.CharField(max_length=255, unique=True, null=True, blank=True) # Maps to Supabase Auth UUID
+    username = models.CharField(max_length=150)
+    email = models.EmailField(unique=True, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Profile for {self.user.username}"
-
+        return self.username
 
 class Question(models.Model):
     DOMAIN_CHOICES = [

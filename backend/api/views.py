@@ -16,6 +16,36 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
 
+    @action(detail=False, methods=['post'])
+    def google_auth(self, request):
+        """
+        Syncs or creates a UserProfile when a user logs in via Supabase Google Auth.
+        Expected Payload: { "supabase_uid": "some-uuid-from-supabase", "email": "user@gmail.com", "username": "Rogers" }
+        """
+        supabase_uid = request.data.get('supabase_uid')
+        email = request.data.get('email')
+        username = request.data.get('username', email.split('@')[0] if email else 'User')
+
+        if not supabase_uid or not email:
+            return Response({"error": "supabase_uid and email are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check if user profile already exists or create it
+        profile, created = UserProfile.objects.get_or_create(
+            supabase_uid=supabase_uid,
+            defaults={'email': email, 'username': username}
+        )
+
+        if not created:
+            profile.email = email
+            profile.save()
+
+        serializer = UserProfileSerializer(profile)
+        return Response({
+            "message": "User authenticated successfully!",
+            "created": created,
+            "profile": serializer.data
+        }, status=status.HTTP_200_OK)
+
 class QuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
@@ -107,9 +137,9 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
     def submit_quiz(self, request):
         """
         Calculates score for submitted answers and saves a QuizAttempt.
-        Payload: { "user_profile_id": 1, "answers": { "question_id_1": "A", "question_id_2": "C" } }
+        Payload: { "supabase_uid": "uuid-here", "answers": { "question_id_1": "A", "question_id_2": "C" } }
         """
-        user_id = request.data.get('user_profile_id')
+        supabase_uid = request.data.get('supabase_uid')
         submitted_answers = request.data.get('answers', {})
         
         total_questions = len(submitted_answers)
@@ -128,9 +158,9 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         score_percentage = (correct_count / total_questions) * 100
 
         user_profile = None
-        if user_id:
+        if supabase_uid:
             try:
-                user_profile = UserProfile.objects.get(pk=user_id)
+                user_profile = UserProfile.objects.get(supabase_uid=supabase_uid)
             except UserProfile.DoesNotExist:
                 pass
 
