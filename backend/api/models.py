@@ -29,10 +29,9 @@ class Question(models.Model):
 
 
 class QuizAttempt(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
-    score = models.IntegerField()
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, null=True, blank=True) # <-- Added null=True, blank=True
+    score = models.FloatField()
     total_questions = models.IntegerField()
-    domain_breakdown = models.JSONField(default=dict, help_text="Tracks performance score per domain")
     completed_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

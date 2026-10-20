@@ -59,13 +59,12 @@ class QuestionViewSet(viewsets.ModelViewSet):
                     {"role": "system", "content": "You are a precise JSON-only generator for educational quizzes."},
                     {"role": "user", "content": prompt}
                 ],
-                model="openai/gpt-oss-20b",  # Stable production model ID on Groq
+                model="openai/gpt-oss-20b",
                 temperature=0.7,
             )
 
             raw_content = chat_completion.choices[0].message.content.strip()
             
-            # Clean up markdown code blocks if the model accidentally includes them
             if raw_content.startswith("```"):
                 raw_content = raw_content.split("```")[1]
                 if raw_content.startswith("json"):
@@ -74,7 +73,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
             questions_data = json.loads(raw_content)
             saved_questions = []
 
-            # Save each generated question into the Supabase DB
             for q in questions_data:
                 options_payload = {
                     "A": q.get("option_a"),
@@ -112,7 +110,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         Payload: { "user_profile_id": 1, "answers": { "question_id_1": "A", "question_id_2": "C" } }
         """
         user_id = request.data.get('user_profile_id')
-        submitted_answers = request.data.get('answers', {})  # Dict of {question_id: selected_option}
+        submitted_answers = request.data.get('answers', {})
         
         total_questions = len(submitted_answers)
         if total_questions == 0:
@@ -129,7 +127,6 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
 
         score_percentage = (correct_count / total_questions) * 100
 
-        # Retrieve user profile if provided
         user_profile = None
         if user_id:
             try:
@@ -137,10 +134,10 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
             except UserProfile.DoesNotExist:
                 pass
 
-        # Save the attempt
         attempt = QuizAttempt.objects.create(
             user=user_profile,
-            score=score_percentage
+            score=score_percentage,
+            total_questions=total_questions
         )
 
         return Response({
