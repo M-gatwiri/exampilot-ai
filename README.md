@@ -29,9 +29,21 @@ The local frontend uses Vite to proxy `/api` requests to Django at `127.0.0.1:80
 
 4. Open the Vite URL shown in the terminal (normally `http://localhost:5173`) and choose **Practice quizzes**. The quiz reads questions already present in the local question bank; this setup does not seed or generate question data. To use a different API URL, set `VITE_API_BASE_URL` to its `/api` base URL before starting Vite.
 
+## Supabase Google sign-in
+
+The app remains usable as a guest without Supabase. To enable **Sign in with Google**:
+
+1. Copy `frontend/.env.example` to `frontend/.env`. Set `VITE_SUPABASE_URL` to the Supabase Project URL and `VITE_SUPABASE_ANON_KEY` to its publishable key (or legacy anon key). These are public client values; never put a service-role/secret key in a `VITE_` variable.
+2. Copy `backend/.env.example` to `backend/.env`. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the same project URL and public key. The backend uses the signed-in access token to request the verified user identity from Supabase before syncing a profile.
+3. In Supabase, enable the Google provider with an OAuth client ID and client secret from your Google Cloud project. In Google Cloud, add `http://localhost:5173` as an authorized JavaScript origin and the callback URL shown in Supabase's Google provider settings as an authorized redirect URI.
+4. In Supabase **Authentication → URL Configuration**, set the local site URL to `http://localhost:5173` and add it to the allowed redirect URLs. If Vite uses another port, update both origins to match.
+5. Restart Django and Vite after changing the environment files. Supabase Auth restores browser sessions and refreshes tokens. The backend rejects profile sync without a valid bearer token and derives the profile ID, email, and name from Supabase's verified user response rather than browser-supplied identity fields.
+
+This integration syncs account profiles only. Quiz attempts, results, and learning insights still use the shared anonymous history. The backend does not provide per-account history or learner-specific authorization for those endpoints; sign-in must not be treated as privacy or access control for quiz data. The UI tells signed-in learners this after successful profile sync.
+
 ## Quiz results and performance
 
-Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. The app does not currently authenticate learners, so anonymous attempts cannot be separated by person; profile-linked attempts are excluded from this endpoint. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. Topic accuracy and rule-based recommendations use saved answer snapshots; optional AI guidance can fail without hiding quiz results.
+Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. Signing in syncs a profile but does not associate attempts or provide per-account history; anonymous attempts cannot be separated by person, and profile-linked attempts are excluded from this endpoint. The API rejects client-supplied `supabase_uid` on quiz submission so a caller cannot misattribute an attempt to another profile. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. Topic accuracy and rule-based recommendations use saved answer snapshots; optional AI guidance can fail without hiding quiz results.
 
 ## Learning explanations
 
@@ -51,4 +63,4 @@ Do not add `.env` files or real API keys to source control. Without this variabl
 
 These rules and their recommendations work without AI. **Get study guidance** optionally asks the existing Groq service for a concise narrative based on the same server-calculated results; if `GROQ_API_KEY` is missing or Groq fails, the rule-based plan remains available. The request does not accept client scores as evidence.
 
-The application does not currently identify learners. As with the existing performance endpoint, topic insights use the anonymous quiz attempts visible in the shared history; they are not isolated to an individual account. Attempts without saved question-level results cannot contribute to topic recommendations.
+Topic insights use the same anonymous quiz attempts visible in shared history; they are not isolated to an individual account, even when the learner signs in. Attempts without saved question-level results cannot contribute to topic recommendations.
