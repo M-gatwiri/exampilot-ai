@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import './App.css'
+import Quiz from './Quiz.jsx'
 
 const navigation = [
 { label: 'Dashboard', icon: '⌂' },
@@ -60,6 +61,7 @@ return ( <div className="app-shell"> <aside className="sidebar">
           className={`nav-item ${activePage === item.label ? 'active' : ''}`}
           key={item.label}
           onClick={() => handleNavigation(item.label)}
+          aria-current={activePage === item.label ? 'page' : undefined}
         >
           <span className="nav-icon" aria-hidden="true">{item.icon}</span>
           <span>{item.label}</span>
@@ -100,6 +102,10 @@ return ( <div className="app-shell"> <aside className="sidebar">
     </header>
 
     <div className="page-content">
+      {activePage === 'Practice quizzes' ? (
+        <Quiz onExit={() => handleNavigation('Dashboard')} />
+      ) : (
+      <>
       <section className="welcome-section">
         <div>
           <div className="eyebrow"><span className="eyebrow-dot" /> YOUR PERSONAL LEARNING SPACE</div>
@@ -254,6 +260,8 @@ return ( <div className="app-shell"> <aside className="sidebar">
         <span>ExamPilot AI</span>
         <span>Built for your next breakthrough. <span className="footer-star">✦</span></span>
       </footer>
+      </>
+      )}
     </div>
   </main>
 </div>
