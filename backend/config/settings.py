@@ -86,6 +86,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from .env file
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+# Supabase public project settings are used only for server-side access-token
+# verification during profile sync. Never put a service-role key in the frontend.
+SUPABASE_URL = os.getenv('SUPABASE_URL', '').rstrip('/')
+SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY', '')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',

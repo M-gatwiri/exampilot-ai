@@ -1,9 +1,96 @@
+import json
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
+from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from .models import Question, QuizAttempt, UserProfile
+
+
+class SupabaseProfileSyncTests(APITestCase):
+    url = "/api/profiles/google_auth/"
+
+    def supabase_response(self, user):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(user).encode("utf-8")
+        return response
+
+    @override_settings(SUPABASE_URL="https://project.supabase.co", SUPABASE_ANON_KEY="public-anon-key")
+    @patch("api.views.urlopen")
+    def test_profile_sync_uses_verified_supabase_identity(self, urlopen):
+        urlopen.return_value = self.supabase_response({
+            "id": "verified-user-id",
+            "email": "learner@example.com",
+            "user_metadata": {"full_name": "A Learner"},
+        })
+
+        response = self.client.post(
+            self.url,
+            {"supabase_uid": "attacker-id", "email": "attacker@example.com", "username": "Attacker"},
+            format="json",
+            HTTP_AUTHORIZATION="Bearer verified-access-token",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["created"])
+        self.assertEqual(response.data["profile"]["supabase_uid"], "verified-user-id")
+        self.assertEqual(response.data["profile"]["email"], "learner@example.com")
+        self.assertEqual(response.data["profile"]["username"], "A Learner")
+        self.assertEqual(UserProfile.objects.count(), 1)
+        request = urlopen.call_args.args[0]
+        self.assertEqual(request.full_url, "https://project.supabase.co/auth/v1/user")
+        self.assertEqual(request.get_header("Authorization"), "Bearer verified-access-token")
+        self.assertEqual(request.get_header("Apikey"), "public-anon-key")
+
+    @override_settings(SUPABASE_URL="https://project.supabase.co", SUPABASE_ANON_KEY="public-anon-key")
+    @patch("api.views.urlopen")
+    def test_profile_sync_updates_existing_verified_profile(self, urlopen):
+        profile = UserProfile.objects.create(
+            supabase_uid="verified-user-id", email="old@example.com", username="Old Name"
+        )
+        urlopen.return_value = self.supabase_response({
+            "id": "verified-user-id",
+            "email": "new@example.com",
+            "user_metadata": {"name": "New Name"},
+        })
+
+        response = self.client.post(self.url, {}, format="json", HTTP_AUTHORIZATION="Bearer valid-token")
+
+        profile.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["created"])
+        self.assertEqual(profile.email, "new@example.com")
+        self.assertEqual(profile.username, "New Name")
+        self.assertEqual(UserProfile.objects.count(), 1)
+
+    @patch("api.views.urlopen")
+    def test_profile_sync_requires_bearer_token_and_backend_configuration(self, urlopen):
+        public_profile_list = self.client.get("/api/profiles/")
+        self.assertEqual(public_profile_list.status_code, 404)
+
+        missing_token = self.client.post(self.url, {}, format="json")
+        self.assertEqual(missing_token.status_code, 401)
+        urlopen.assert_not_called()
+
+        with override_settings(SUPABASE_URL="", SUPABASE_ANON_KEY=""):
+            unconfigured = self.client.post(
+                self.url, {}, format="json", HTTP_AUTHORIZATION="Bearer valid-token"
+            )
+        self.assertEqual(unconfigured.status_code, 503)
+        urlopen.assert_not_called()
+
+    @override_settings(SUPABASE_URL="https://project.supabase.co", SUPABASE_ANON_KEY="public-anon-key")
+    @patch("api.views.urlopen")
+    def test_profile_sync_rejects_invalid_supabase_session(self, urlopen):
+        from urllib.error import HTTPError
+
+        urlopen.side_effect = HTTPError("https://project.supabase.co/auth/v1/user", 401, "invalid", {}, None)
+        response = self.client.post(
+            self.url, {}, format="json", HTTP_AUTHORIZATION="Bearer expired-token"
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(UserProfile.objects.count(), 0)
 
 
 class QuizApiTests(APITestCase):
@@ -53,6 +140,18 @@ class QuizApiTests(APITestCase):
         self.assertEqual(performance_response.data["attempts"][0]["id"], submit_response.data["attempt_id"])
         self.assertTrue(performance_response.data["attempts"][0]["review_available"])
         self.assertEqual(performance_response.data["domains"][0]["domain"], "Cloud Concepts")
+
+    def test_submit_quiz_rejects_client_supplied_profile_identity(self):
+        profile = UserProfile.objects.create(supabase_uid="known-user", username="Learner")
+
+        response = self.client.post(
+            "/api/attempts/submit_quiz/",
+            {"supabase_uid": profile.supabase_uid, "answers": {str(self.question.id): "A"}},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(QuizAttempt.objects.count(), 0)
 
     def test_performance_endpoint_returns_empty_history(self):
         response = self.client.get("/api/attempts/performance/")

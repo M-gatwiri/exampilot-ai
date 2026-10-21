@@ -1,6 +1,10 @@
 import os
 import json
 import math
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+from django.conf import settings
+from django.db import IntegrityError, transaction
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -21,32 +25,74 @@ def _rule_based_insight_text(learning_insights):
         return learning_insights['message']
     return ' '.join(item['recommendation'] for item in recommendations[:3])
 
-class UserProfileViewSet(viewsets.ModelViewSet):
+class UserProfileViewSet(viewsets.GenericViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
 
     @action(detail=False, methods=['post'])
     def google_auth(self, request):
         """
-        Syncs or creates a UserProfile when a user logs in via Supabase Google Auth.
-        Expected Payload: { "supabase_uid": "some-uuid-from-supabase", "email": "user@gmail.com", "username": "Rogers" }
+        Verify the caller's Supabase access token and sync the verified identity.
         """
-        supabase_uid = request.data.get('supabase_uid')
-        email = request.data.get('email')
-        username = request.data.get('username', email.split('@')[0] if email else 'User')
+        auth_header = request.headers.get('Authorization', '')
+        scheme, _, access_token = auth_header.partition(' ')
+        if scheme.lower() != 'bearer' or not access_token.strip():
+            return Response({'error': 'A valid Supabase bearer token is required.'}, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not supabase_uid or not email:
-            return Response({"error": "supabase_uid and email are required."}, status=status.HTTP_400_BAD_REQUEST)
+        supabase_url = getattr(settings, 'SUPABASE_URL', '').rstrip('/')
+        anon_key = getattr(settings, 'SUPABASE_ANON_KEY', '')
+        if not supabase_url or not anon_key:
+            return Response({'error': 'Supabase profile sync is not configured on the backend.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        # Check if user profile already exists or create it
-        profile, created = UserProfile.objects.get_or_create(
-            supabase_uid=supabase_uid,
-            defaults={'email': email, 'username': username}
+        verify_request = Request(
+            f'{supabase_url}/auth/v1/user',
+            headers={
+                'apikey': anon_key,
+                'Authorization': f'Bearer {access_token.strip()}',
+                'Accept': 'application/json',
+            },
         )
+        try:
+            with urlopen(verify_request, timeout=8) as response:
+                verified_user = json.loads(response.read().decode('utf-8'))
+        except HTTPError as error:
+            if error.code in (401, 403):
+                return Response({'error': 'The Supabase session is invalid or expired. Please sign in again.'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({'error': 'Supabase could not verify the session. Please try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        except (URLError, TimeoutError, ValueError):
+            return Response({'error': 'Supabase could not verify the session. Check the backend connection and try again.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
-        if not created:
-            profile.email = email
-            profile.save()
+        if not isinstance(verified_user, dict):
+            return Response({'error': 'Supabase returned an invalid user response.'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        supabase_uid = verified_user.get('id')
+        email = verified_user.get('email')
+        if not isinstance(supabase_uid, str) or not supabase_uid or not isinstance(email, str) or not email:
+            return Response({'error': 'The verified Supabase account must have an ID and email address.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        metadata = verified_user.get('user_metadata') or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+        username = metadata.get('full_name') or metadata.get('name') or email.split('@')[0]
+        if not isinstance(username, str):
+            username = email.split('@')[0]
+        username = username.strip()[:150] or email.split('@')[0][:150]
+        profile = UserProfile.objects.filter(supabase_uid=supabase_uid).first()
+        if UserProfile.objects.filter(email__iexact=email).exclude(pk=profile.pk if profile else None).exists():
+            return Response({'error': 'This email is already linked to another profile. Contact support to resolve the account link.'}, status=status.HTTP_409_CONFLICT)
+
+        try:
+            with transaction.atomic():
+                if profile is None:
+                    profile = UserProfile.objects.create(supabase_uid=supabase_uid, email=email, username=username)
+                    created = True
+                else:
+                    profile.email = email
+                    profile.username = username
+                    profile.save(update_fields=['email', 'username'])
+                    created = False
+        except IntegrityError:
+            return Response({'error': 'This email is already linked to another profile. Contact support to resolve the account link.'}, status=status.HTTP_409_CONFLICT)
 
         serializer = UserProfileSerializer(profile)
         return Response({
@@ -263,9 +309,13 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
     def submit_quiz(self, request):
         """
         Calculates score for submitted answers and saves a QuizAttempt.
-        Payload: { "supabase_uid": "uuid-here", "answers": { "question_id_1": "A", "question_id_2": "C" } }
+        Payload: { "answers": { "question_id_1": "A", "question_id_2": "C" } }
         """
-        supabase_uid = request.data.get('supabase_uid')
+        if 'supabase_uid' in request.data:
+            return Response(
+                {'error': 'Quiz attempts are not linked to Supabase profiles yet. Omit supabase_uid; client-supplied identity is not trusted.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         submitted_answers = request.data.get('answers')
         if not isinstance(submitted_answers, dict):
             return Response({"error": "Answers must be an object keyed by question ID."}, status=status.HTTP_400_BAD_REQUEST)
@@ -324,15 +374,7 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
 
         score_percentage = (correct_count / total_questions) * 100
 
-        user_profile = None
-        if supabase_uid:
-            try:
-                user_profile = UserProfile.objects.get(supabase_uid=supabase_uid)
-            except UserProfile.DoesNotExist:
-                pass
-
         attempt = QuizAttempt.objects.create(
-            user=user_profile,
             score=score_percentage,
             total_questions=total_questions,
             question_results=question_results,
