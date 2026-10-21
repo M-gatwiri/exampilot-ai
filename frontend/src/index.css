@@ -1,16 +1,30 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
 
 :root {
-font-family: 'DM Sans', sans-serif;
-color: #25243a;
-background: #f8f8fc;
-font-synthesis: none;
-text-rendering: optimizeLegibility;
--webkit-font-smoothing: antialiased;
--moz-osx-font-smoothing: grayscale;
+  font-family: 'DM Sans', sans-serif;
+  color: #203238;
+  background: #f3f6f2;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
 
-font-optical-sizing: auto;
-font-weight: 400;
+  --color-canvas: #f3f6f2;
+  --color-surface: #ffffff;
+  --color-ink: #203238;
+  --color-muted: #64777a;
+  --color-border: #dfe7e2;
+  --color-brand: #176b60;
+  --color-brand-deep: #124b47;
+  --color-brand-tint: #e8f2ed;
+  --color-accent: #d7ee9a;
+  --color-warning: #9a6724;
+  --color-danger: #a34743;
+  --shadow-card: 0 12px 32px rgb(28 52 48 / 5%);
+  --radius-card: 16px;
+  --radius-control: 10px;
 }
 
 * {
@@ -40,8 +54,8 @@ color: inherit;
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-outline: 3px solid #6851cd;
-outline-offset: 3px;
+  outline: 3px solid #176b60;
+  outline-offset: 3px;
 }
 
 button {
@@ -55,5 +69,5 @@ text-decoration: none;
 
 ::selection {
 color: #fff;
-background: #7762db;
+background: #176b60;
 }

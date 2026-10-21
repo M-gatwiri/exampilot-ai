@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import './App.css'
-import Quiz from './Quiz.jsx'
+import PracticeHub from './PracticeHub.jsx'
 import PerformanceDashboard from './PerformanceDashboard.jsx'
 import PerformanceSummary from './PerformanceSummary.jsx'
 import { useAuth } from './auth/useAuth.js'
 
 const navigation = [
   { label: 'Dashboard', icon: '⌂' },
-  { label: 'Practice quizzes', icon: '▤' },
+  { label: 'Practice Hub', icon: '▤' },
   { label: 'My performance', icon: '↗' },
   { label: 'Revision plan', icon: '▧' },
 ]
@@ -101,47 +101,52 @@ function App() {
         )}
 
         <div className="page-content">
-          {activePage === 'Practice quizzes' ? (
-            <Quiz
+          {activePage === 'Practice Hub' ? (
+            <PracticeHub
               onExit={() => handleNavigation('Dashboard')}
               onComplete={(result) => { setLatestResult(result); handleNavigation('My performance') }}
             />
           ) : activePage === 'My performance' ? (
-            <PerformanceDashboard latestResult={latestResult} onPractice={() => handleNavigation('Practice quizzes')} />
+            <PerformanceDashboard latestResult={latestResult} onPractice={() => handleNavigation('Practice Hub')} />
           ) : activePage === 'Revision plan' ? (
             <section className="quiz-state" aria-labelledby="revision-plan-title">
               <p className="section-kicker">NEXT STEPS</p>
               <h1 id="revision-plan-title">Revision plans are not available yet</h1>
               <p>Check your performance dashboard to see which topics may need more practice, or start another quiz.</p>
               <button className="quiz-primary-button" onClick={() => handleNavigation('My performance')}>View performance</button>
-              <button className="quiz-secondary-button" onClick={() => handleNavigation('Practice quizzes')}>Start a practice quiz</button>
+              <button className="quiz-secondary-button" onClick={() => handleNavigation('Practice Hub')}>Start a practice quiz</button>
             </section>
           ) : (
             <>
               <section className="welcome-section">
                 <div>
-                  <div className="eyebrow"><span className="eyebrow-dot" /> YOUR PERSONAL LEARNING SPACE</div>
-                  <h1>Let's make progress<span className="heading-period">.</span></h1>
-                  <p className="welcome-description">Every question brings you closer to your next big achievement.</p>
+                  <div className="eyebrow"><span className="eyebrow-dot" /> AZ-900 CERTIFICATION PREP</div>
+                  <h1>Make your next study session count.</h1>
+                  <p className="welcome-description">Practice from the question bank, then use your results to decide what to review next.</p>
+                  <div className="welcome-actions">
+                    <button className="quiz-primary-button" onClick={() => handleNavigation('Practice Hub')}>Start a practice session <span aria-hidden="true">→</span></button>
+                    <button className="welcome-secondary-action" onClick={() => handleNavigation('My performance')}>View results</button>
+                  </div>
                 </div>
-                <div className="welcome-decoration" aria-hidden="true">
-                  <span className="decoration-ring ring-one" />
-                  <span className="decoration-ring ring-two" />
-                  <span className="decoration-star">✦</span>
+                <div className="welcome-aside" aria-label="Current certification track">
+                  <span>EXAM TRACK</span>
+                  <strong>AZ-900</strong>
+                  <p>Microsoft Azure Fundamentals</p>
+                  <span className="welcome-aside-note">Mixed question bank</span>
                 </div>
               </section>
               <PerformanceSummary
                 onOpenPerformance={() => handleNavigation('My performance')}
-                onPractice={() => handleNavigation('Practice quizzes')}
+                onPractice={() => handleNavigation('Practice Hub')}
               />
               <section className="subjects-section">
                 <div className="section-heading">
                   <div>
                     <p className="section-kicker">YOUR STUDY SPACE</p>
-                    <h2>Explore study areas</h2>
-                    <p className="section-description">Choose an area to learn about, then start an AZ-900 practice quiz.</p>
+                    <h2>Study areas</h2>
+                    <p className="section-description">Explore the topics covered in the AZ-900 question bank.</p>
                   </div>
-                  <button className="text-button" onClick={() => handleNavigation('Practice quizzes')}>Start practice <span aria-hidden="true">→</span></button>
+                  <button className="text-button" onClick={() => handleNavigation('Practice Hub')}>Open practice hub <span aria-hidden="true">→</span></button>
                 </div>
                 <div className="subject-grid">
                   {subjects.map((subject) => (
@@ -152,7 +157,6 @@ function App() {
                       </div>
                       <h3>{subject.title}</h3>
                       <p className="subject-description">{subject.description}</p>
-                      <button className="subject-button" onClick={() => handleNavigation('Practice quizzes')}>Start AZ-900 practice <span aria-hidden="true">→</span></button>
                     </article>
                   ))}
                 </div>
