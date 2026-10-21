@@ -1,3 +1,6 @@
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from rest_framework.test import APITestCase
 
 from .models import Question, QuizAttempt, UserProfile
@@ -150,3 +153,134 @@ class QuizApiTests(APITestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data["error"], "No answers provided.")
+
+
+class ExplainAnswerApiTests(APITestCase):
+    def setUp(self):
+        self.question = Question.objects.create(
+            domain="cloud_concepts",
+            question_text="Which service provides virtual machines?",
+            options={"A": "Azure Virtual Machines", "B": "Azure DNS"},
+            correct_answer="A",
+            explanation="Virtual Machines provide compute instances.",
+            is_ai_generated=False,
+        )
+        self.url = f"/api/questions/{self.question.id}/explain_answer/"
+
+    @staticmethod
+    def completion(content):
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+        )
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-key")
+    def test_generates_explanation_from_verified_question_and_answer(self, _getenv, groq):
+        groq.return_value.chat.completions.create.return_value = self.completion(
+            "Virtual Machines provide compute; DNS resolves names."
+        )
+
+        response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "ai")
+        self.assertFalse(response.data["fallback"])
+        self.assertFalse(response.data["retryable"])
+        self.assertFalse(response.data["correct"])
+        self.assertEqual(response.data["selected_answer"], "B")
+        self.assertEqual(response.data["correct_answer"], "A")
+        prompt = groq.return_value.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn("Azure Virtual Machines", prompt)
+        self.assertIn("Learner choice: B — Azure DNS", prompt)
+        self.assertIn("Learner was correct: false", prompt)
+        groq.assert_called_once_with(api_key="test-key", timeout=12.0, max_retries=0)
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-key")
+    def test_explains_correct_answers_without_changing_correctness(self, _getenv, groq):
+        groq.return_value.chat.completions.create.return_value = self.completion(
+            "Virtual Machines supply compute capacity."
+        )
+
+        response = self.client.post(self.url, {"selected_answer": "a"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["correct"])
+        self.assertEqual(response.data["correct_answer"], "A")
+
+    def test_missing_question_returns_not_found(self):
+        response = self.client.post("/api/questions/999999/explain_answer/", {"selected_answer": "A"}, format="json")
+        self.assertEqual(response.status_code, 404)
+
+    def test_rejects_invalid_data_and_client_supplied_truth(self):
+        missing = self.client.post(self.url, {}, format="json")
+        invalid_option = self.client.post(self.url, {"selected_answer": "Z"}, format="json")
+        invalid_type = self.client.post(self.url, {"selected_answer": 1}, format="json")
+        mismatched_answer = self.client.post(self.url, {"selected_answer": "B", "question_id": 999}, format="json")
+        forged_correctness = self.client.post(
+            self.url,
+            {"selected_answer": "B", "correct_answer": "B", "correct": True},
+            format="json",
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(invalid_option.status_code, 400)
+        self.assertEqual(invalid_type.status_code, 400)
+        self.assertEqual(mismatched_answer.status_code, 400)
+        self.assertEqual(forged_correctness.status_code, 400)
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value=None)
+    def test_missing_credentials_uses_stored_explanation(self, _getenv, groq):
+        response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "stored")
+        self.assertTrue(response.data["fallback"])
+        self.assertFalse(response.data["retryable"])
+        self.assertEqual(response.data["explanation"], self.question.explanation)
+        groq.assert_not_called()
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-key")
+    def test_provider_failures_fall_back_without_leaking_errors_or_secrets(self, _getenv, groq):
+        create = groq.return_value.chat.completions.create
+        for provider_error in (TimeoutError("test-key timed out"), RuntimeError("rate limited")):
+            with self.subTest(error=type(provider_error).__name__):
+                create.side_effect = provider_error
+                response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["source"], "stored")
+                self.assertTrue(response.data["fallback"])
+                self.assertTrue(response.data["retryable"])
+                self.assertNotIn("test-key", str(response.data))
+                self.assertNotIn("timed out", str(response.data))
+                self.assertNotIn("rate limited", str(response.data))
+                self.assertEqual(response.data["explanation"], self.question.explanation)
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-key")
+    def test_empty_or_invalid_provider_responses_use_fallback(self, _getenv, groq):
+        create = groq.return_value.chat.completions.create
+        for content in (None, "", "x" * 2001):
+            with self.subTest(content_length=len(content) if content else 0):
+                create.return_value = self.completion(content)
+                response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.data["fallback"])
+                self.assertEqual(response.data["source"], "stored")
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value=None)
+    def test_missing_stored_explanation_has_safe_database_based_fallback(self, _getenv, groq):
+        self.question.explanation = ""
+        self.question.save(update_fields=["explanation"])
+
+        response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "basic")
+        self.assertIn("Azure Virtual Machines", response.data["explanation"])
+        self.assertNotIn("Azure DNS", response.data["explanation"])
+        groq.assert_not_called()

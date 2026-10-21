@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
@@ -25,6 +25,82 @@ async function readResponse(response) {
   return body
 }
 
+function AnswerExplanation({ item }) {
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState('idle')
+  const [explanation, setExplanation] = useState(null)
+  const [error, setError] = useState('')
+  const requestInFlight = useRef(false)
+
+  const loadExplanation = async () => {
+    if (requestInFlight.current) return
+    requestInFlight.current = true
+    setOpen(true)
+    setStatus('loading')
+    setError('')
+    try {
+      const data = await readResponse(await fetch(
+        `${API_BASE_URL}/questions/${item.question_id}/explain_answer/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selected_answer: item.selected_answer }),
+        },
+      ))
+      setExplanation(data)
+      setStatus('ready')
+    } catch (requestError) {
+      setError(requestError instanceof TypeError
+        ? 'Could not reach the explanation service. Your saved answer guidance is still available above.'
+        : requestError.message || 'An explanation could not be generated. Your saved answer guidance is still available above.')
+      setStatus('error')
+    } finally {
+      requestInFlight.current = false
+    }
+  }
+
+  const toggleExplanation = () => {
+    if (status === 'idle' || status === 'error') {
+      loadExplanation()
+    } else if (status !== 'loading') {
+      setOpen((value) => !value)
+    }
+  }
+
+  return (
+    <div className="answer-explanation">
+      <button
+        className="explanation-toggle"
+        type="button"
+        onClick={toggleExplanation}
+        disabled={status === 'loading'}
+        aria-expanded={open}
+        aria-controls={`answer-explanation-${item.question_id}`}
+      >
+        {status === 'loading' ? 'Generating explanation…' : status === 'error' ? 'Retry AI explanation' : open ? 'Hide AI explanation' : 'Explain my answer'}
+      </button>
+      {open && (
+        <div className="ai-explanation-panel" id={`answer-explanation-${item.question_id}`} aria-live="polite">
+          {status === 'loading' && <p role="status">Preparing a question-specific explanation…</p>}
+          {status === 'error' && <p role="alert">{error}</p>}
+          {status === 'ready' && (
+            <>
+              <p className="explanation-source">{explanation.fallback ? 'Saved guidance' : 'AI learning explanation'}</p>
+              {explanation.fallback && <p className="explanation-notice" role="status">{explanation.notice}</p>}
+              <p>{explanation.explanation}</p>
+              {explanation.retryable && (
+                <button className="explanation-retry" type="button" onClick={loadExplanation}>
+                  Try AI explanation again
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AttemptReview({ attempt }) {
   if (!attempt.review_available || attempt.question_results.length === 0) {
     return <p className="performance-muted">Question by question review is unavailable for this older attempt.</p>
@@ -41,7 +117,8 @@ function AttemptReview({ attempt }) {
           <h3>{item.question_text}</h3>
           <p><strong>Your answer:</strong> {item.selected_answer} — {optionLabel(item.options, item.selected_answer)}</p>
           <p><strong>Correct answer:</strong> {item.correct_answer} — {optionLabel(item.options, item.correct_answer)}</p>
-          {item.explanation && <p className="review-explanation"><strong>Why:</strong> {item.explanation}</p>}
+          {item.explanation && <p className="review-explanation"><strong>Saved explanation:</strong> {item.explanation}</p>}
+          <AnswerExplanation item={item} />
         </li>
       ))}
     </ol>
