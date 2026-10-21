@@ -4,6 +4,7 @@ import PracticeHub from './PracticeHub.jsx'
 import PerformanceDashboard from './PerformanceDashboard.jsx'
 import PerformanceSummary from './PerformanceSummary.jsx'
 import { useAuth } from './auth/useAuth.js'
+import { useTheme } from './theme/useTheme.js'
 
 const navigation = [
   { label: 'Dashboard', icon: '⌂' },
@@ -21,6 +22,7 @@ const subjects = [
 function App() {
   const [activePage, setActivePage] = useState('Dashboard')
   const [latestResult, setLatestResult] = useState(null)
+  const { theme, toggleTheme } = useTheme()
   const {
     user, status, isConfigured, authError, clearAuthError, signInWithGoogle,
     signOut, profile, profileStatus, profileError, retryProfileSync,
@@ -72,6 +74,16 @@ function App() {
           <div className="breadcrumb">Workspace <span>/</span> <strong>{activePage}</strong></div>
           <div className="topbar-right">
             <span className="today-label">Your learning journey</span>
+            <button
+              className="theme-toggle-button"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme. Current theme is ${theme}.`}
+              aria-pressed={theme === 'dark'}
+            >
+              <span className="theme-toggle-icon" aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
+              <span>{theme === 'dark' ? 'Dark' : 'Light'} theme</span>
+            </button>
             {status === 'loading' ? (
               <span className="auth-status" role="status">Checking account…</span>
             ) : user ? (
