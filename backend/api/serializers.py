@@ -14,7 +14,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 class QuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizAttempt
-        fields = '__all__'
+        fields = ('id', 'user', 'score', 'total_questions', 'completed_at')
 
 class FlashcardSerializer(serializers.ModelSerializer):
     class Meta:

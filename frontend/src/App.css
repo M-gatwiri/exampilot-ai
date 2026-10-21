@@ -1269,3 +1269,383 @@ transition-duration: 0.01ms !important;
     font-size: 12px;
   }
 }
+
+.performance-page {
+  max-width: 1000px;
+  margin: 10px auto 38px;
+}
+
+.performance-heading,
+.performance-section-heading,
+.domain-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.performance-heading h1,
+.performance-section h2,
+.performance-empty h2 {
+  margin: 8px 0 0;
+  color: #302e49;
+  font-family: 'Manrope', sans-serif;
+}
+
+.performance-heading h1 {
+  font-size: clamp(24px, 3vw, 32px);
+  letter-spacing: -1px;
+}
+
+.performance-heading .section-description {
+  font-size: 12px;
+}
+
+.performance-state,
+.performance-muted {
+  color: #77748f;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.performance-error,
+.performance-empty,
+.dashboard-performance,
+.latest-result-card,
+.performance-section {
+  padding: clamp(20px, 3vw, 30px);
+  margin-top: 20px;
+  border: 1px solid #eeedf5;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 20px rgb(40 35 90 / 3%);
+}
+
+.performance-empty {
+  text-align: center;
+}
+
+.performance-empty p,
+.dashboard-summary-empty p {
+  color: #77748f;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.latest-result-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.latest-result-score h2 {
+  margin: 8px 0 0;
+  color: #7661dc;
+  font-family: 'Manrope', sans-serif;
+  font-size: 60px;
+  line-height: 1;
+}
+
+.latest-result-score h2 span {
+  font-size: 28px;
+}
+
+.result-facts {
+  display: flex;
+  gap: clamp(22px, 5vw, 52px);
+  margin: 0;
+}
+
+.result-facts dt {
+  color: #858299;
+  font-size: 11px;
+}
+
+.result-facts dd {
+  margin: 7px 0 0;
+  color: #302e49;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.performance-section h2,
+.performance-section-heading h2 {
+  font-size: 19px;
+}
+
+.domain-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.domain-card {
+  padding: 17px;
+  border: 1px solid #eeedf5;
+  border-radius: 11px;
+}
+
+.domain-card h3 {
+  margin: 0;
+  color: #403d57;
+  font-size: 13px;
+}
+
+.domain-card-heading strong {
+  color: #6550ca;
+  font-size: 14px;
+}
+
+.domain-card > p {
+  margin: 8px 0 12px;
+  color: #858299;
+  font-size: 11px;
+}
+
+.domain-tag {
+  display: inline-block;
+  padding: 5px 8px;
+  margin-top: 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.domain-tag.needs-practice {
+  background: #fff1ed;
+  color: #aa543b;
+}
+
+.domain-tag.doing-well {
+  background: #eaf8f1;
+  color: #357b5a;
+}
+
+.performance-error-text {
+  color: #a73e4b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.insight-copy {
+  color: #4c4962;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+.trend-list,
+.attempt-history,
+.review-list {
+  padding: 0;
+  margin: 18px 0 0;
+  list-style: none;
+}
+
+.trend-list li,
+.attempt-history li {
+  display: grid;
+  grid-template-columns: minmax(115px, 1fr) minmax(90px, 2fr) 48px;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0eef6;
+  color: #77748f;
+  font-size: 11px;
+}
+
+.attempt-history li {
+  grid-template-columns: 1fr 1fr 48px;
+}
+
+.history-attempt-button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: inherit;
+  align-items: center;
+  gap: 14px;
+  padding: 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #77748f;
+  font-size: 11px;
+  text-align: left;
+}
+
+.history-attempt-button[aria-pressed="true"] {
+  background: #f5f2ff;
+}
+
+.history-attempt-button strong {
+  color: #403d57;
+  text-align: right;
+}
+
+.trend-list li:last-child,
+.attempt-history li:last-child {
+  border-bottom: 0;
+}
+
+.trend-list strong,
+.attempt-history strong {
+  color: #403d57;
+  text-align: right;
+}
+
+.performance-section > h2 + .performance-muted {
+  margin-top: 12px;
+}
+
+.review-item {
+  padding: 18px 0;
+  border-bottom: 1px solid #eeedf5;
+}
+
+.review-item:last-child {
+  border-bottom: 0;
+}
+
+.review-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-outcome {
+  color: #357b5a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-incorrect .review-outcome {
+  color: #aa543b;
+}
+
+.review-item h3 {
+  margin: 13px 0 10px;
+  color: #403d57;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.review-item p {
+  margin: 7px 0;
+  color: #66637a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.review-explanation {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #f8f7fc;
+}
+
+.dashboard-performance {
+  margin: 24px 0;
+}
+
+.dashboard-performance .section-heading {
+  align-items: flex-start;
+}
+
+.dashboard-performance .section-heading h2 {
+  color: #302e49;
+  font-family: 'Manrope', sans-serif;
+  font-size: 20px;
+}
+
+.summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.summary-metrics article {
+  padding: 16px;
+  border-radius: 10px;
+  background: #f8f7fc;
+}
+
+.summary-metrics span {
+  display: block;
+  color: #858299;
+  font-size: 11px;
+}
+
+.summary-metrics strong {
+  display: block;
+  margin-top: 8px;
+  color: #302e49;
+  font-family: 'Manrope', sans-serif;
+  font-size: 23px;
+}
+
+.summary-recent-attempts {
+  padding: 0;
+  margin: 14px 0 0;
+  list-style: none;
+}
+
+.summary-recent-attempts li {
+  display: grid;
+  grid-template-columns: 1fr 1fr 52px;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid #f0eef6;
+  color: #77748f;
+  font-size: 11px;
+}
+
+.summary-recent-attempts li:last-child {
+  border-bottom: 0;
+}
+
+.summary-recent-attempts strong {
+  color: #403d57;
+  text-align: right;
+}
+
+.dashboard-summary-empty {
+  padding-top: 12px;
+}
+
+@media (max-width: 640px) {
+  .performance-heading,
+  .performance-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .latest-result-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .result-facts {
+    flex-wrap: wrap;
+  }
+
+  .summary-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-list li,
+  .summary-recent-attempts li {
+    grid-template-columns: 1fr auto;
+  }
+
+  .history-attempt-button {
+    grid-template-columns: 1fr auto;
+  }
+
+  .trend-list .progress-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

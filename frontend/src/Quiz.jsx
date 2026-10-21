@@ -22,7 +22,7 @@ async function readResponse(response) {
   return data
 }
 
-export default function Quiz({ onExit }) {
+export default function Quiz({ onExit, onComplete }) {
   const [questions, setQuestions] = useState([])
   const [answers, setAnswers] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -88,6 +88,7 @@ export default function Quiz({ onExit }) {
       }))
       setResult(data)
       setStatus('complete')
+      onComplete?.(data)
     } catch (submitError) {
       setError(submitError instanceof TypeError
         ? 'Could not reach the quiz API. Your answers are still here; check that the backend is running and try again.'
