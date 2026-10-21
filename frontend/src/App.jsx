@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import './App.css'
 import Quiz from './Quiz.jsx'
+import PerformanceDashboard from './PerformanceDashboard.jsx'
+import PerformanceSummary from './PerformanceSummary.jsx'
 
 const navigation = [
 { label: 'Dashboard', icon: '⌂' },
@@ -13,37 +15,26 @@ const subjects = [
 {
 title: 'Cloud Concepts',
 description: 'Understand cloud computing fundamentals.',
-questions: 25,
-progress: 72,
 color: 'purple',
 icon: '☁',
 },
 {
 title: 'Azure Architecture & Services',
 description: 'Explore Azure services and infrastructure.',
-questions: 40,
-progress: 48,
 color: 'blue',
 icon: '◇',
 },
 {
 title: 'Azure Management & Governance',
 description: 'Learn about cost, security, and governance.',
-questions: 35,
-progress: 31,
 color: 'orange',
 icon: '▦',
 },
 ]
 
-const activities = [
-{ title: 'Cloud Concepts', date: 'Today', score: 80, color: 'purple' },
-{ title: 'Azure Architecture & Services', date: 'Yesterday', score: 65, color: 'blue' },
-{ title: 'Azure Management & Governance', date: '2 days ago', score: 55, color: 'orange' },
-]
-
 function App() {
 const [activePage, setActivePage] = useState('Dashboard')
+const [latestResult, setLatestResult] = useState(null)
 
 const handleNavigation = (page) => {
 setActivePage(page)
@@ -103,7 +94,15 @@ return ( <div className="app-shell"> <aside className="sidebar">
 
     <div className="page-content">
       {activePage === 'Practice quizzes' ? (
-        <Quiz onExit={() => handleNavigation('Dashboard')} />
+        <Quiz
+          onExit={() => handleNavigation('Dashboard')}
+          onComplete={(result) => { setLatestResult(result); handleNavigation('My performance') }}
+        />
+      ) : activePage === 'My performance' ? (
+        <PerformanceDashboard
+          latestResult={latestResult}
+          onPractice={() => handleNavigation('Practice quizzes')}
+        />
       ) : (
       <>
       <section className="welcome-section">
@@ -121,62 +120,10 @@ return ( <div className="app-shell"> <aside className="sidebar">
         </div>
       </section>
 
-      <section className="stats-grid" aria-label="Learning statistics">
-        <article className="stat-card">
-          <div className="stat-top">
-            <span className="stat-icon purple-icon">▤</span>
-            <span className="stat-caption">ALL TIME</span>
-          </div>
-          <div className="stat-number">12 <span>quizzes</span></div>
-          <p className="stat-description">Practice sessions completed</p>
-        </article>
-
-        <article className="stat-card">
-          <div className="stat-top">
-            <span className="stat-icon green-icon">↗</span>
-            <span className="stat-caption">AVERAGE</span>
-          </div>
-          <div className="stat-number">74<span>%</span></div>
-          <p className="stat-description">Your overall quiz score</p>
-        </article>
-
-        <article className="stat-card">
-          <div className="stat-top">
-            <span className="stat-icon orange-icon">♧</span>
-            <span className="stat-caption">THIS WEEK</span>
-          </div>
-          <div className="stat-number">4 <span>days</span></div>
-          <p className="stat-description">Keep your momentum going</p>
-        </article>
-      </section>
-
-      <section className="study-goal">
-        <div className="goal-copy">
-          <div className="goal-icon">✦</div>
-          <div>
-            <p className="section-kicker">YOUR DAILY GOAL</p>
-            <h2>A little practice goes a long way.</h2>
-            <p className="goal-description">You're building a habit. Keep showing up for yourself.</p>
-          </div>
-        </div>
-        <div className="goal-progress">
-          <div className="goal-progress-label">
-            <span>Today's progress</span>
-            <strong>2 of 5 questions</strong>
-          </div>
-          <div
-            className="progress-track"
-            role="progressbar"
-            aria-label="Daily question goal"
-            aria-valuenow="40"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <div className="progress-fill" style={{ width: '40%' }} />
-          </div>
-          <span className="goal-remaining">3 more questions to reach your goal</span>
-        </div>
-      </section>
+      <PerformanceSummary
+        onOpenPerformance={() => handleNavigation('My performance')}
+        onPractice={() => handleNavigation('Practice quizzes')}
+      />
 
       <section className="subjects-section">
         <div className="section-heading">
@@ -199,23 +146,6 @@ return ( <div className="app-shell"> <aside className="sidebar">
               </div>
               <h3>{subject.title}</h3>
               <p className="subject-description">{subject.description}</p>
-              <div className="subject-meta">
-                <span>{subject.questions} practice questions</span>
-                <strong>{subject.progress}%</strong>
-              </div>
-              <div
-                className="progress-track subject-progress"
-                role="progressbar"
-                aria-label={`${subject.title} progress`}
-                aria-valuenow={subject.progress}
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                <div
-                  className={`progress-fill ${subject.color}-fill`}
-                  style={{ width: `${subject.progress}%` }}
-                />
-              </div>
               <button
                 className="subject-button"
                 onClick={() => handleNavigation('Practice quizzes')}
@@ -223,35 +153,6 @@ return ( <div className="app-shell"> <aside className="sidebar">
                 Practise topic <span>→</span>
               </button>
             </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="activity-section">
-        <div className="section-heading activity-heading">
-          <div>
-            <p className="section-kicker">YOUR JOURNEY SO FAR</p>
-            <h2>Recent practice</h2>
-          </div>
-          <button className="text-button" onClick={() => handleNavigation('My performance')}>
-            View performance <span>→</span>
-          </button>
-        </div>
-
-        <div className="activity-list">
-          {activities.map((activity) => (
-            <div className="activity-row" key={activity.title}>
-              <span className={`activity-icon ${activity.color}`}>✓</span>
-              <div className="activity-info">
-                <strong>{activity.title}</strong>
-                <span>{activity.date} · Practice quiz</span>
-              </div>
-              <div className="activity-score">
-                <strong>{activity.score}%</strong>
-                <span>Score</span>
-              </div>
-              <span className="activity-arrow">→</span>
-            </div>
           ))}
         </div>
       </section>

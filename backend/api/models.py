@@ -33,6 +33,7 @@ class QuizAttempt(models.Model):
     user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, null=True, blank=True) # <-- Added null=True, blank=True
     score = models.FloatField()
     total_questions = models.IntegerField()
+    question_results = models.JSONField(default=list, blank=True)
     completed_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

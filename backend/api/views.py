@@ -133,6 +133,56 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
     queryset = QuizAttempt.objects.all()
     serializer_class = QuizAttemptSerializer
 
+    @action(detail=False, methods=['get'])
+    def performance(self, request):
+        """Return persisted anonymous attempts and aggregates for the dashboard."""
+        attempts = list(
+            QuizAttempt.objects.filter(user__isnull=True)
+            .order_by('-completed_at', '-id')
+        )
+        domains = {}
+        history = []
+
+        for attempt in attempts:
+            question_results = attempt.question_results or []
+            known_correct = sum(bool(item.get('correct')) for item in question_results)
+            correct_answers = (
+                known_correct
+                if len(question_results) == attempt.total_questions
+                else round(attempt.score * attempt.total_questions / 100)
+            )
+
+            for item in question_results:
+                domain = item.get('domain') or 'Uncategorized'
+                summary = domains.setdefault(domain, {'questions': 0, 'correct': 0})
+                summary['questions'] += 1
+                summary['correct'] += int(bool(item.get('correct')))
+
+            history.append({
+                'id': attempt.id,
+                'score': attempt.score,
+                'correct_answers': correct_answers,
+                'total_questions': attempt.total_questions,
+                'completed_at': attempt.completed_at,
+                'question_results': question_results,
+                'review_available': len(question_results) == attempt.total_questions,
+            })
+
+        domain_performance = [
+            {
+                'domain': domain,
+                'questions': summary['questions'],
+                'correct_answers': summary['correct'],
+                'score': round(summary['correct'] / summary['questions'] * 100, 1),
+            }
+            for domain, summary in sorted(domains.items())
+        ]
+
+        return Response({
+            'attempts': history,
+            'domains': domain_performance,
+        })
+
     @action(detail=False, methods=['post'])
     def submit_quiz(self, request):
         """
@@ -140,20 +190,61 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         Payload: { "supabase_uid": "uuid-here", "answers": { "question_id_1": "A", "question_id_2": "C" } }
         """
         supabase_uid = request.data.get('supabase_uid')
-        submitted_answers = request.data.get('answers', {})
-        
-        total_questions = len(submitted_answers)
-        if total_questions == 0:
+        submitted_answers = request.data.get('answers')
+        if not isinstance(submitted_answers, dict):
+            return Response({"error": "Answers must be an object keyed by question ID."}, status=status.HTTP_400_BAD_REQUEST)
+        if not submitted_answers:
             return Response({"error": "No answers provided."}, status=status.HTTP_400_BAD_REQUEST)
 
+        try:
+            question_ids = [int(question_id) for question_id in submitted_answers]
+        except (TypeError, ValueError):
+            return Response({"error": "Answer keys must be question IDs."}, status=status.HTTP_400_BAD_REQUEST)
+        if len(set(question_ids)) != len(question_ids):
+            return Response({"error": "Each question can only be answered once."}, status=status.HTTP_400_BAD_REQUEST)
+
+        questions = Question.objects.in_bulk(question_ids)
+        missing_ids = [question_id for question_id in question_ids if question_id not in questions]
+        if missing_ids:
+            return Response(
+                {"error": "One or more questions no longer exist.", "question_ids": missing_ids},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        question_results = []
         correct_count = 0
-        for q_id, chosen_option in submitted_answers.items():
-            try:
-                question = Question.objects.get(pk=q_id)
-                if question.correct_answer.strip().upper() == chosen_option.strip().upper():
-                    correct_count += 1
-            except Question.DoesNotExist:
-                continue
+        for submitted_id, chosen_option in submitted_answers.items():
+            question = questions[int(submitted_id)]
+            if not isinstance(chosen_option, str):
+                return Response({"error": "Each answer must be an option key."}, status=status.HTTP_400_BAD_REQUEST)
+
+            selected_answer = chosen_option.strip().upper()
+            if isinstance(question.options, dict):
+                valid_options = {str(key).strip().upper() for key in question.options}
+            elif isinstance(question.options, list):
+                valid_options = {chr(ord('A') + index) for index in range(len(question.options))}
+            else:
+                valid_options = set()
+            if selected_answer not in valid_options:
+                return Response(
+                    {"error": f"Answer for question {question.pk} is not a valid option."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            is_correct = question.correct_answer.strip().upper() == selected_answer
+            correct_count += int(is_correct)
+            question_results.append({
+                'question_id': question.pk,
+                'question_text': question.question_text,
+                'domain': dict(Question.DOMAIN_CHOICES).get(question.domain, question.domain),
+                'options': question.options,
+                'selected_answer': selected_answer,
+                'correct_answer': question.correct_answer.strip().upper(),
+                'correct': is_correct,
+                'explanation': question.explanation,
+            })
+
+        total_questions = len(question_results)
 
         score_percentage = (correct_count / total_questions) * 100
 
@@ -167,14 +258,17 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
         attempt = QuizAttempt.objects.create(
             user=user_profile,
             score=score_percentage,
-            total_questions=total_questions
+            total_questions=total_questions,
+            question_results=question_results,
         )
 
         return Response({
             "total_questions": total_questions,
             "correct_answers": correct_count,
             "score": score_percentage,
-            "attempt_id": attempt.id
+            "attempt_id": attempt.id,
+            "completed_at": attempt.completed_at,
+            "question_results": question_results,
         }, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'])
