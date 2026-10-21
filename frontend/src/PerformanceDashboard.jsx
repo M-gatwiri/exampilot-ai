@@ -17,6 +17,17 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? 'Date unavailable' : date.toLocaleString()
 }
 
+function classificationDetails(learningInsights, domain) {
+  const classification = learningInsights?.topics?.find((topic) => topic.topic === domain)?.classification
+  const labels = {
+    focus: ['Focus area', 'needs-practice'],
+    strength: ['Strength', 'doing-well'],
+    developing: ['Developing', 'developing'],
+    insufficient_data: ['More answers needed', 'needs-more-data'],
+  }
+  return labels[classification] || ['Not assessed', 'needs-more-data']
+}
+
 async function readResponse(response) {
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -132,6 +143,10 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
   const [insightStatus, setInsightStatus] = useState('idle')
   const [insightError, setInsightError] = useState('')
   const [insights, setInsights] = useState('')
+  const [insightSource, setInsightSource] = useState('')
+  const [insightNotice, setInsightNotice] = useState('')
+  const [insightRetryable, setInsightRetryable] = useState(false)
+  const insightRequestInFlight = useRef(false)
   const [selectedAttemptId, setSelectedAttemptId] = useState(() => latestResult?.attempt_id || latestResult?.id || null)
 
   const [retryCount, setRetryCount] = useState(0)
@@ -176,29 +191,39 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
   const latest = attempts[0]
   const selectedAttempt = attempts.find((attempt) => attempt.id === selectedAttemptId) || latest
   const domains = performance?.domains || []
+  const learningInsights = performance?.learning_insights
   const historyForChart = [...attempts].filter((attempt) => typeof attempt.score === 'number').reverse()
-  const hasTopicData = domains.length > 0
+  const canGetInsights = learningInsights?.status === 'ready'
 
   const requestInsights = async () => {
+    if (insightRequestInFlight.current || !canGetInsights) return
+    insightRequestInFlight.current = true
     setInsightStatus('loading')
     setInsightError('')
+    setInsightNotice('')
     setInsights('')
     try {
-      const topicScores = Object.fromEntries(domains.map((domain) => [domain.domain, domain.score]))
       const data = await readResponse(await fetch(`${API_BASE_URL}/attempts/generate_insights/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic_scores: topicScores }),
+        body: JSON.stringify({}),
       }))
       setInsights(data.insights || '')
+      setInsightSource(data.source || 'rules')
+      setInsightNotice(data.notice || '')
+      setInsightRetryable(Boolean(data.retryable))
       setInsightStatus('ready')
     } catch (requestError) {
       setInsightError(requestError instanceof TypeError
         ? 'Could not reach the recommendations service. Your results are still available below.'
         : requestError.message || 'Recommendations are unavailable right now. Your results are still available below.')
       setInsightStatus('error')
+    } finally {
+      insightRequestInFlight.current = false
     }
   }
+
+  const savedGuidanceOnly = insightStatus === 'ready' && insightSource === 'rules' && !insightRetryable
 
   return (
     <section className="performance-page" aria-labelledby="performance-title">
@@ -259,8 +284,8 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
                     <div className="progress-track" role="progressbar" aria-label={`${domain.domain} score`} aria-valuenow={domain.score} aria-valuemin="0" aria-valuemax="100">
                       <div className="progress-fill" style={{ width: `${domain.score}%` }} />
                     </div>
-                    <span className={`domain-tag ${domain.score < 70 ? 'needs-practice' : 'doing-well'}`}>
-                      {domain.score < 70 ? 'Focus area' : 'Strength'}
+                    <span className={`domain-tag ${classificationDetails(learningInsights, domain.domain)[1]}`}>
+                      {classificationDetails(learningInsights, domain.domain)[0]}
                     </span>
                   </article>
                 ))}
@@ -270,24 +295,114 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
             )}
           </section>
 
-          <section className="performance-section" aria-labelledby="recommendations-title">
-            <div className="performance-section-heading">
-              <div>
-                <p className="section-kicker">NEXT STEPS</p>
-                <h2 id="recommendations-title">Revision recommendations</h2>
+          {learningInsights && (
+            <section className="performance-section learning-insights" aria-labelledby="learning-insights-title">
+              <div className="performance-section-heading">
+                <div>
+                  <p className="section-kicker">PERSONALIZED NEXT STEPS</p>
+                  <h2 id="learning-insights-title">Your topic study plan</h2>
+                </div>
+                <span className="insight-rule-label">
+                  Assessed after {learningInsights.minimum_answers_per_topic}+ answers per topic
+                </span>
               </div>
-              <button className="quiz-secondary-button" onClick={requestInsights} disabled={!hasTopicData || insightStatus === 'loading'}>
-                {insightStatus === 'loading' ? 'Generating…' : insightStatus === 'ready' ? 'Refresh recommendations' : 'Get recommendations'}
-              </button>
-            </div>
-            {!hasTopicData && <p className="performance-muted">Complete a quiz with topic data to request recommendations.</p>}
-            {insightError && <p className="performance-error-text" role="alert">{insightError}</p>}
-            {insightStatus === 'loading' && <p className="performance-muted" role="status">Generating recommendations from your topic scores…</p>}
-            {insights && <p className="insight-copy">{insights}</p>}
-            {hasTopicData && !insights && insightStatus !== 'loading' && (
-              <p className="performance-muted">Choose “Get recommendations” to ask the existing insights service for guidance based on these scores.</p>
-            )}
-          </section>
+              <p className="performance-muted">{learningInsights.message}</p>
+
+              {learningInsights.status === 'insufficient_data' ? (
+                <div className="insight-empty-state">
+                  <h3>More quiz answers needed</h3>
+                  <p>Recommendations use saved answer results. Complete at least {learningInsights.minimum_answers_per_topic} questions in a topic to get a reliable assessment.</p>
+                  <button className="quiz-primary-button" onClick={onPractice}>Take a practice quiz</button>
+                </div>
+              ) : (
+                <>
+                  {learningInsights.focus_areas.length > 0 && (
+                    <div className="insight-topic-group">
+                      <h3>Revise first</h3>
+                      <ol className="insight-recommendation-list">
+                        {learningInsights.recommendations.filter((item) => item.priority === 'high').map((item) => (
+                          <li className="insight-recommendation high-priority" key={item.topic}>
+                            <div className="insight-recommendation-heading">
+                              <h4>{item.topic}</h4>
+                              <strong>{item.accuracy}%</strong>
+                            </div>
+                            <p>{item.recommendation}</p>
+                            <span>{item.correct_answers} correct of {item.questions} answers</span>
+                            <button className="text-button" onClick={onPractice}>Practice AZ-900 questions <span aria-hidden="true">→</span></button>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {learningInsights.recommendations.some((item) => ['medium', 'maintenance'].includes(item.priority)) && (
+                    <div className="insight-topic-group">
+                      <h3>{learningInsights.focus_areas.length ? 'Keep building' : 'Maintain your strengths'}</h3>
+                      <ol className="insight-recommendation-list">
+                        {learningInsights.recommendations.filter((item) => ['medium', 'maintenance'].includes(item.priority)).map((item) => (
+                          <li className="insight-recommendation" key={item.topic}>
+                            <div className="insight-recommendation-heading">
+                              <h4>{item.topic}</h4>
+                              <strong>{item.accuracy}%</strong>
+                            </div>
+                            <p>{item.recommendation}</p>
+                            <span>{item.correct_answers} correct of {item.questions} answers</span>
+                            <button className="text-button" onClick={onPractice}>Practice AZ-900 questions <span aria-hidden="true">→</span></button>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+
+                  {learningInsights.recommendations.some((item) => item.priority === 'more_data') && (
+                    <div className="insight-topic-group">
+                      <h3>More answers needed</h3>
+                      <ul className="insight-more-data-list">
+                        {learningInsights.recommendations.filter((item) => item.priority === 'more_data').map((item) => (
+                          <li key={item.topic}>
+                            <p>{item.recommendation}</p>
+                            <button className="text-button" onClick={onPractice}>Continue AZ-900 practice <span aria-hidden="true">→</span></button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {learningInsights.trends.length > 0 && (
+                    <div className="insight-topic-group">
+                      <h3>Recent topic changes</h3>
+                      <ul className="insight-trend-list">
+                        {learningInsights.trends.map((trend) => (
+                          <li key={trend.topic}>
+                            <strong>{trend.topic}</strong>
+                            <span>{trend.previous_accuracy}% ({trend.previous_questions} earlier answers) to {trend.latest_accuracy}% ({trend.latest_questions} latest answers)</span>
+                            <span className={`trend-change ${trend.direction}`}>
+                              {trend.change_percentage_points > 0 ? '+' : ''}{trend.change_percentage_points} percentage points · {trend.direction}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {canGetInsights && (
+                <div className="ai-guidance-block">
+                  <div className="performance-section-heading">
+                    <h3>Study guidance</h3>
+                    <button className="quiz-secondary-button" onClick={requestInsights} disabled={insightStatus === 'loading' || savedGuidanceOnly}>
+                      {insightStatus === 'loading' ? 'Preparing guidance…' : savedGuidanceOnly ? 'Rule-based guidance shown' : insightStatus === 'ready' && insightSource === 'ai' ? 'Refresh AI guidance' : insightRetryable ? 'Retry AI guidance' : 'Get study guidance'}
+                    </button>
+                  </div>
+                  {insightStatus === 'loading' && <p className="performance-muted" role="status">Preparing guidance from saved quiz results…</p>}
+                  {insightError && <p className="performance-error-text" role="alert">{insightError}</p>}
+                  {insightNotice && <p className="insight-notice" role="status">{insightNotice}</p>}
+                  {insights && <p className="insight-copy" aria-live="polite">{insights}</p>}
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="performance-section" aria-labelledby="score-trend-title">
             <p className="section-kicker">REAL QUIZ ATTEMPTS</p>

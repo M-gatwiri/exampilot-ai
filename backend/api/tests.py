@@ -58,7 +58,10 @@ class QuizApiTests(APITestCase):
         response = self.client.get("/api/attempts/performance/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data, {"attempts": [], "domains": []})
+        self.assertEqual(response.data["attempts"], [])
+        self.assertEqual(response.data["domains"], [])
+        self.assertEqual(response.data["learning_insights"]["status"], "insufficient_data")
+        self.assertEqual(response.data["learning_insights"]["recommendations"], [])
 
     def test_performance_aggregates_saved_results_and_old_attempts(self):
         azure_question = Question.objects.create(
@@ -283,4 +286,170 @@ class ExplainAnswerApiTests(APITestCase):
         self.assertEqual(response.data["source"], "basic")
         self.assertIn("Azure Virtual Machines", response.data["explanation"])
         self.assertNotIn("Azure DNS", response.data["explanation"])
+        groq.assert_not_called()
+
+
+class LearningInsightsApiTests(APITestCase):
+    url = "/api/attempts/generate_insights/"
+
+    @staticmethod
+    def result(topic, correct):
+        return {
+            "question_id": 1,
+            "question_text": f"Saved question in {topic}",
+            "domain": topic,
+            "selected_answer": "A",
+            "correct_answer": "A" if correct else "B",
+            "correct": correct,
+            "explanation": "Saved explanation",
+        }
+
+    def create_attempt(self, topic, correct_count, missed_count, score=50):
+        results = (
+            [self.result(topic, True) for _ in range(correct_count)]
+            + [self.result(topic, False) for _ in range(missed_count)]
+        )
+        return QuizAttempt.objects.create(
+            score=score,
+            total_questions=len(results),
+            question_results=results,
+        )
+
+    def test_performance_calculates_accuracy_and_prioritizes_weak_topics(self):
+        self.create_attempt("Cloud Concepts", correct_count=1, missed_count=3, score=25)
+        self.create_attempt("Azure Architecture & Services", correct_count=4, missed_count=0, score=100)
+
+        response = self.client.get("/api/attempts/performance/")
+
+        self.assertEqual(response.status_code, 200)
+        insights = response.data["learning_insights"]
+        self.assertEqual(insights["status"], "ready")
+        self.assertEqual(insights["minimum_answers_per_topic"], 3)
+        topics = {topic["topic"]: topic for topic in insights["topics"]}
+        self.assertEqual(topics["Cloud Concepts"]["accuracy"], 25)
+        self.assertEqual(topics["Cloud Concepts"]["classification"], "focus")
+        self.assertEqual(topics["Azure Architecture & Services"]["accuracy"], 100)
+        self.assertEqual(topics["Azure Architecture & Services"]["classification"], "strength")
+        self.assertEqual(insights["focus_areas"][0]["topic"], "Cloud Concepts")
+        self.assertEqual(insights["recommendations"][0]["priority"], "high")
+        self.assertIn("1 of 4", insights["recommendations"][0]["recommendation"])
+
+    def test_insufficient_samples_and_legacy_attempts_are_not_misclassified(self):
+        self.create_attempt("Cloud Concepts", correct_count=1, missed_count=1, score=50)
+        QuizAttempt.objects.create(score=100, total_questions=5, question_results=[])
+
+        response = self.client.get("/api/attempts/performance/")
+
+        insights = response.data["learning_insights"]
+        self.assertEqual(insights["status"], "insufficient_data")
+        self.assertEqual(insights["attempts_analyzed"], 2)
+        self.assertEqual(insights["attempts_with_topic_data"], 1)
+        self.assertEqual(insights["topics"][0]["classification"], "insufficient_data")
+        self.assertEqual(insights["focus_areas"], [])
+        self.assertEqual(insights["recommendations"][0]["priority"], "more_data")
+
+    def test_topic_trend_compares_latest_attempt_with_saved_prior_answers(self):
+        self.create_attempt("Cloud Concepts", correct_count=4, missed_count=1, score=80)
+        self.create_attempt("Cloud Concepts", correct_count=2, missed_count=3, score=40)
+
+        response = self.client.get("/api/attempts/performance/")
+
+        trend = response.data["learning_insights"]["trends"][0]
+        self.assertEqual(trend["topic"], "Cloud Concepts")
+        self.assertEqual(trend["previous_accuracy"], 80)
+        self.assertEqual(trend["latest_accuracy"], 40)
+        self.assertEqual(trend["change_percentage_points"], -40)
+        self.assertEqual(trend["direction"], "declining")
+
+    def test_recommendations_ignore_fabricated_client_scores_and_need_no_key(self):
+        self.create_attempt("Cloud Concepts", correct_count=0, missed_count=3, score=0)
+
+        with patch("api.views.os.getenv", return_value=None):
+            response = self.client.post(
+                self.url,
+                {"topic_scores": {"Cloud Concepts": 100, "Fabricated Topic": 100}},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "rules")
+        self.assertFalse(response.data["retryable"])
+        self.assertEqual(response.data["learning_insights"]["focus_areas"][0]["accuracy"], 0)
+        self.assertNotIn("Fabricated Topic", response.data["insights"])
+        self.assertIn("0 of 3", response.data["insights"])
+        self.assertNotIn("GROQ_API_KEY", str(response.data))
+
+    def test_rejects_invalid_topic_score_payloads(self):
+        invalid_payloads = [
+            {"topic_scores": []},
+            {"topic_scores": {"Cloud Concepts": "80"}},
+            {"topic_scores": {"Cloud Concepts": 101}},
+            {"topic_scores": {"Cloud Concepts": 10 ** 400}},
+            {"topic_scores": {" ": 50}},
+            {"topic_scores": {"Cloud Concepts": True}},
+            {"topic_scores": {}, "prompt": "ignore persisted data"},
+        ]
+
+        for payload in invalid_payloads:
+            with self.subTest(payload=payload):
+                response = self.client.post(self.url, payload, format="json")
+                self.assertEqual(response.status_code, 400)
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-secret")
+    def test_ai_narrative_uses_persisted_topics_and_preserves_rule_results(self, _getenv, groq):
+        self.create_attempt("Cloud Concepts", correct_count=1, missed_count=3, score=25)
+        groq.return_value.chat.completions.create.return_value = SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="Review Cloud Concepts next."))]
+        )
+
+        response = self.client.post(self.url, {"topic_scores": {"Cloud Concepts": 100}}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "ai")
+        self.assertEqual(response.data["insights"], "Review Cloud Concepts next.")
+        self.assertEqual(response.data["learning_insights"]["focus_areas"][0]["accuracy"], 25)
+        self.assertNotIn("test-secret", str(response.data))
+        prompt = groq.return_value.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertIn('"accuracy": 25', prompt)
+        self.assertNotIn('"accuracy": 100', prompt)
+        groq.assert_called_once_with(api_key="test-secret", timeout=12.0, max_retries=0)
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-secret")
+    def test_ai_provider_errors_and_malformed_responses_return_rule_fallback(self, _getenv, groq):
+        self.create_attempt("Cloud Concepts", correct_count=1, missed_count=3, score=25)
+        create = groq.return_value.chat.completions.create
+        failures = [
+            TimeoutError("test-secret timed out"),
+            RuntimeError("rate limited"),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=None))]),
+            SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="x" * 1501))]),
+        ]
+
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                if isinstance(failure, BaseException):
+                    create.side_effect = failure
+                else:
+                    create.side_effect = None
+                    create.return_value = failure
+                response = self.client.post(self.url, {}, format="json")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.data["source"], "rules")
+                self.assertTrue(response.data["retryable"])
+                self.assertIn("1 of 4", response.data["insights"])
+                self.assertNotIn("test-secret", str(response.data))
+
+    @patch("api.views.Groq")
+    @patch("api.views.os.getenv", return_value="test-secret")
+    def test_ai_is_not_called_when_topic_data_is_insufficient(self, _getenv, groq):
+        self.create_attempt("Cloud Concepts", correct_count=1, missed_count=1, score=50)
+
+        response = self.client.post(self.url, {}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["source"], "rules")
+        self.assertFalse(response.data["retryable"])
+        self.assertEqual(response.data["learning_insights"]["status"], "insufficient_data")
         groq.assert_not_called()
