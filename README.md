@@ -32,3 +32,15 @@ The local frontend uses Vite to proxy `/api` requests to Django at `127.0.0.1:80
 ## Quiz results and performance
 
 Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. The app does not currently authenticate learners, so anonymous attempts cannot be separated by person; profile-linked attempts are excluded from this endpoint. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. The existing insights service can generate optional topic recommendations when its backend API key is configured; a failure there does not hide quiz results.
+
+## Learning explanations
+
+Answer review always shows the explanation saved with each question. Select **Explain my answer** to request a question-specific explanation from the backend Groq integration. The server uses the stored question, choices, correct answer, and selected option; the browser cannot supply correctness data or a custom prompt. Explanations are generated only when requested and do not affect quiz scoring. If Groq is not configured or unavailable, the saved explanation remains visible and is returned as a fallback.
+
+AI explanations are optional for local development. The existing backend reads `GROQ_API_KEY` from the backend process environment or `backend/.env` (loaded by `python-dotenv`). To enable them locally, add this line to `backend/.env` with your own key:
+
+```dotenv
+GROQ_API_KEY=your_groq_api_key
+```
+
+Do not add `.env` files or real API keys to source control. Without this variable, quiz submission, saved answer review, and performance history continue to work; the explanation action displays the stored question explanation.
