@@ -23,7 +23,12 @@ display: flex;
 align-items: center;
 gap: 11px;
 padding: 0 8px;
+border: 0;
 margin-bottom: 45px;
+background: transparent;
+color: inherit;
+text-align: left;
+cursor: pointer;
 }
 
 .brand-mark {
@@ -54,7 +59,7 @@ color: #7964dc;
 .sidebar-label,
 .section-kicker {
 margin: 0;
-color: #9392a7;
+color: #716e83;
 font-size: 10px;
 font-weight: 700;
 letter-spacing: 1.25px;
@@ -103,18 +108,6 @@ place-items: center;
 font-size: 19px;
 }
 
-.nav-count {
-display: grid;
-width: 21px;
-height: 21px;
-margin-left: auto;
-place-items: center;
-border-radius: 6px;
-background: #fff;
-color: #7964dc;
-font-size: 10px;
-}
-
 .sidebar-bottom {
 margin-top: auto;
 }
@@ -146,21 +139,18 @@ font-size: 12px;
 
 .help-card p {
 margin: 0;
-color: #858399;
+color: #77748f;
 font-size: 11px;
 line-height: 1.7;
 }
 
-.profile-button {
+.profile-summary {
 display: flex;
 align-items: center;
 gap: 10px;
 width: 100%;
 padding: 12px 2px 0;
-border: 0;
 border-top: 1px solid #efedf5;
-background: transparent;
-text-align: left;
 }
 
 .avatar,
@@ -188,14 +178,8 @@ font-size: 10px;
 }
 
 .profile-details small {
-color: #9290a5;
+color: #77748f;
 font-size: 10px;
-}
-
-.profile-menu {
-margin-left: auto;
-color: #9290a5;
-font-size: 20px;
 }
 
 .main-content {
@@ -218,7 +202,7 @@ backdrop-filter: blur(12px);
 }
 
 .breadcrumb {
-color: #9897a9;
+color: #716e83;
 font-size: 11px;
 }
 
@@ -239,7 +223,7 @@ gap: 16px;
 }
 
 .today-label {
-color: #89879c;
+color: #716e83;
 font-size: 11px;
 }
 
@@ -463,7 +447,7 @@ letter-spacing: -0.45px;
 .goal-description,
 .section-description {
 margin: 7px 0 0;
-color: #9290a4;
+color: #77748f;
 font-size: 10px;
 line-height: 1.7;
 }
@@ -625,7 +609,7 @@ line-height: 1.55;
 .subject-description {
 min-height: 34px;
 margin: 7px 0 20px;
-color: #9693a7;
+color: #77748f;
 font-size: 10px;
 line-height: 1.7;
 }
@@ -861,10 +845,6 @@ font-size: 10px;
 font-size: 15px;
 }
 
-.nav-count {
-display: none;
-}
-
 .main-content {
 margin-left: 0;
 }
@@ -1081,7 +1061,8 @@ transition-duration: 0.01ms !important;
 }
 
 .quiz-secondary-button:disabled,
-.quiz-primary-button:disabled {
+.quiz-primary-button:disabled,
+.quiz-exit-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
