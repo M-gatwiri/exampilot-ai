@@ -31,7 +31,7 @@ The local frontend uses Vite to proxy `/api` requests to Django at `127.0.0.1:80
 
 ## Quiz results and performance
 
-Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. The app does not currently authenticate learners, so anonymous attempts cannot be separated by person; profile-linked attempts are excluded from this endpoint. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. The existing insights service can generate optional topic recommendations when its backend API key is configured; a failure there does not hide quiz results.
+Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. The app does not currently authenticate learners, so anonymous attempts cannot be separated by person; profile-linked attempts are excluded from this endpoint. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. Topic accuracy and rule-based recommendations use saved answer snapshots; optional AI guidance can fail without hiding quiz results.
 
 ## Learning explanations
 
@@ -44,3 +44,11 @@ GROQ_API_KEY=your_groq_api_key
 ```
 
 Do not add `.env` files or real API keys to source control. Without this variable, quiz submission, saved answer review, and performance history continue to work; the explanation action displays the stored question explanation.
+
+## Topic insights and recommendations
+
+**My performance** now includes a rule-based study plan calculated from saved question results. A topic is assessed after at least 3 saved answers: below 70% is a focus area, 70–79% is developing, and 80% or higher is a strength. Topics below the sample minimum are marked as needing more answers rather than being called weak. Topic changes compare the latest saved attempt for that topic with earlier saved answers when both samples contain at least 3 answers; a change over 5 percentage points is marked improving or declining.
+
+These rules and their recommendations work without AI. **Get study guidance** optionally asks the existing Groq service for a concise narrative based on the same server-calculated results; if `GROQ_API_KEY` is missing or Groq fails, the rule-based plan remains available. The request does not accept client scores as evidence.
+
+The application does not currently identify learners. As with the existing performance endpoint, topic insights use the anonymous quiz attempts visible in the shared history; they are not isolated to an individual account. Attempts without saved question-level results cannot contribute to topic recommendations.
