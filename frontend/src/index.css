@@ -38,8 +38,9 @@ color: inherit;
 }
 
 button:focus-visible,
-a:focus-visible {
-outline: 3px solid #a99af8;
+a:focus-visible,
+input:focus-visible {
+outline: 3px solid #6851cd;
 outline-offset: 3px;
 }
 

@@ -41,7 +41,10 @@ setActivePage(page)
 }
 
 return ( <div className="app-shell"> <aside className="sidebar">
-<a className="brand" href="#" onClick={() => handleNavigation('Dashboard')}> <span className="brand-mark">E</span> <span className="brand-name">ExamPilot<span>AI</span></span> </a>
+<button className="brand" type="button" onClick={() => handleNavigation('Dashboard')} aria-label="ExamPilot AI dashboard">
+  <span className="brand-mark">E</span>
+  <span className="brand-name">ExamPilot<span>AI</span></span>
+</button>
 
 ```
     <div className="sidebar-label">WORKSPACE</div>
@@ -56,9 +59,6 @@ return ( <div className="app-shell"> <aside className="sidebar">
         >
           <span className="nav-icon" aria-hidden="true">{item.icon}</span>
           <span>{item.label}</span>
-          {item.label === 'Practice quizzes' && (
-            <span className="nav-count">3</span>
-          )}
         </button>
       ))}
     </nav>
@@ -70,14 +70,13 @@ return ( <div className="app-shell"> <aside className="sidebar">
         <p>Small steps every day lead to big results.</p>
       </div>
 
-      <button className="profile-button">
-        <span className="avatar">M</span>
+      <div className="profile-summary">
+        <span className="avatar" aria-hidden="true">EP</span>
         <span className="profile-details">
-          <strong>My learning space</strong>
-          <small>Free account</small>
+          <strong>Practice workspace</strong>
+          <small>Guest session</small>
         </span>
-        <span className="profile-menu">···</span>
-      </button>
+      </div>
     </div>
   </aside>
 
@@ -88,7 +87,7 @@ return ( <div className="app-shell"> <aside className="sidebar">
       </div>
       <div className="topbar-right">
         <span className="today-label">Your learning journey</span>
-        <span className="top-avatar">M</span>
+        <span className="top-avatar" aria-hidden="true">EP</span>
       </div>
     </header>
 
@@ -103,6 +102,14 @@ return ( <div className="app-shell"> <aside className="sidebar">
           latestResult={latestResult}
           onPractice={() => handleNavigation('Practice quizzes')}
         />
+      ) : activePage === 'Revision plan' ? (
+        <section className="quiz-state" aria-labelledby="revision-plan-title">
+          <p className="section-kicker">NEXT STEPS</p>
+          <h1 id="revision-plan-title">Revision plans are not available yet</h1>
+          <p>Check your performance dashboard to see which topics may need more practice, or start another quiz.</p>
+          <button className="quiz-primary-button" onClick={() => handleNavigation('My performance')}>View performance</button>
+          <button className="quiz-secondary-button" onClick={() => handleNavigation('Practice quizzes')}>Start a practice quiz</button>
+        </section>
       ) : (
       <>
       <section className="welcome-section">
@@ -129,11 +136,11 @@ return ( <div className="app-shell"> <aside className="sidebar">
         <div className="section-heading">
           <div>
             <p className="section-kicker">YOUR STUDY SPACE</p>
-            <h2>Pick up where you left off</h2>
-            <p className="section-description">Choose a topic and keep sharpening your knowledge.</p>
+            <h2>Explore study areas</h2>
+            <p className="section-description">Choose an area to learn about, then start an AZ-900 practice quiz.</p>
           </div>
           <button className="text-button" onClick={() => handleNavigation('Practice quizzes')}>
-            All topics <span>→</span>
+            Start practice <span>→</span>
           </button>
         </div>
 
@@ -150,7 +157,7 @@ return ( <div className="app-shell"> <aside className="sidebar">
                 className="subject-button"
                 onClick={() => handleNavigation('Practice quizzes')}
               >
-                Practise topic <span>→</span>
+                Start AZ-900 practice <span>→</span>
               </button>
             </article>
           ))}

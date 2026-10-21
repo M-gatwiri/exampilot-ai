@@ -147,7 +147,7 @@ export default function Quiz({ onExit, onComplete }) {
           <h1 id="quiz-title">Knowledge check</h1>
           <p className="section-description">Take your time and choose the best answer.</p>
         </div>
-        <button className="quiz-exit-button" onClick={onExit}>Exit quiz</button>
+        <button className="quiz-exit-button" onClick={onExit} disabled={status === 'submitting'}>Exit quiz</button>
       </div>
 
       <div className="quiz-progress-block">
