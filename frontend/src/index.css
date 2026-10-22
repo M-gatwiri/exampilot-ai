@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+
+:root {
+  font-family: 'DM Sans', sans-serif;
+  color: #203238;
+  background: #f3f6f2;
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-optical-sizing: auto;
+  font-weight: 400;
+
+  --color-canvas: #f3f6f2;
+  --color-surface: #ffffff;
+  --color-ink: #203238;
+  --color-muted: #64777a;
+  --color-border: #dfe7e2;
+  --color-brand: #176b60;
+  --color-brand-deep: #124b47;
+  --color-brand-tint: #e8f2ed;
+  --color-action: #176b60;
+  --color-accent: #d7ee9a;
+  --color-warning: #9a6724;
+  --color-danger: #a34743;
+  --color-success: #286c50;
+  --color-warning-surface: #fbf0dc;
+  --color-warning-ink: #80541f;
+  --color-control-surface: #f5f8f4;
+  --color-control-selected: #edf5ef;
+  --color-sidebar-ink: #f6faf5;
+  --shadow-card: 0 12px 32px rgb(28 52 48 / 5%);
+  --radius-card: 16px;
+  --radius-control: 10px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --color-canvas: #101b1a;
+  --color-surface: #192725;
+  --color-ink: #edf5f0;
+  --color-muted: #bdcbc5;
+  --color-border: #3a5049;
+  --color-brand: #72c3ad;
+  --color-brand-deep: #102f2c;
+  --color-brand-tint: #29443c;
+  --color-action: #176b60;
+  --color-accent: #d7ee9a;
+  --color-warning: #f0c477;
+  --color-danger: #ff928b;
+  --color-success: #91d4ad;
+  --color-warning-surface: #493b25;
+  --color-warning-ink: #f5d79c;
+  --color-control-surface: #203431;
+  --color-control-selected: #29443c;
+  --color-sidebar-ink: #edf5f0;
+  --shadow-card: 0 12px 32px rgb(0 0 0 / 22%);
+}
+
+* {
+  box-sizing: border-box;
+  }
+
+html {
+min-width: 320px;
+min-height: 100%;
+}
+
+body {
+margin: 0;
+min-width: 320px;
+min-height: 100vh;
+color: var(--color-ink);
+background: var(--color-canvas);
+}
+
+body,
+button {
+font-family: 'DM Sans', sans-serif;
+}
+
+button {
+color: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 3px;
+}
+
+button {
+cursor: pointer;
+}
+
+a {
+color: inherit;
+text-decoration: none;
+}
+
+::selection {
+color: #fff;
+background: var(--color-brand-deep);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
