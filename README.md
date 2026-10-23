@@ -64,3 +64,31 @@ Do not add `.env` files or real API keys to source control. Without this variabl
 These rules and their recommendations work without AI. **Get study guidance** optionally asks the existing Groq service for a concise narrative based on the same server-calculated results; if `GROQ_API_KEY` is missing or Groq fails, the rule-based plan remains available. The request does not accept client scores as evidence.
 
 Topic insights use the same anonymous quiz attempts visible in shared history; they are not isolated to an individual account, even when the learner signs in. Attempts without saved question-level results cannot contribute to topic recommendations.
+
+## Git Bash commands on Windows
+
+The current checkout already has `backend/.venv` (Python 3.15.0rc3); reuse it rather than creating another environment. The Python launcher did not report a stable interpreter here. On a fresh setup, use an installed stable Python compatible with the Django version in `requirements.txt`.
+
+Copy `backend/.env.example` to `backend/.env` if needed, generate a fresh development secret with `python -c "import secrets; print(secrets.token_urlsafe(50))"`, and set `SECRET_KEY` in that file before starting Django. Keep `.env` files local; they are ignored by Git.
+
+Run these commands in two Git Bash terminals from the repository root:
+
+**Backend**
+
+```bash
+cd backend
+source .venv/Scripts/activate
+python -m pip install -r requirements.txt
+python manage.py migrate --settings=config.settings_local
+python manage.py runserver 127.0.0.1:8000 --settings=config.settings_local
+```
+
+**Frontend**
+
+```bash
+cd frontend
+npm.cmd install
+npm.cmd run dev -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:5173`; Django runs at `http://127.0.0.1:8000`. The Vite proxy forwards `/api` to Django. The practice quiz works in guest mode; Google sign-in and AI calls need their configured external services.

@@ -18,17 +18,25 @@ from dotenv import load_dotenv
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Read the backend-local environment before using any configuration values.
+load_dotenv(BASE_DIR / '.env')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_x(ysdy(t8k%(wd0)kr$k6fd4%x%j98t3v4ho!kgv&7uesblhi'
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise RuntimeError('SECRET_KEY must be configured in the environment.')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() in {'true', '1', 'yes'}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
 
 
 # Application definition
@@ -41,6 +49,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'corsheaders',
     'rest_framework',
 
     'api',
@@ -79,12 +88,6 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Load environment variables from .env file
-load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # Supabase public project settings are used only for server-side access-token
 # verification during profile sync. Never put a service-role key in the frontend.
@@ -150,7 +153,9 @@ MAILERS = {
 }
 
 # CORS Settings
-CORS_ALLOW_ALL_ORIGINS = True  # Convenient during active development, or specify her exact port below:
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-# ]
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+]
