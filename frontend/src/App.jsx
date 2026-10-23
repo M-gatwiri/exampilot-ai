@@ -14,13 +14,14 @@ const navigation = [
 ]
 
 const subjects = [
-  { title: 'Cloud Concepts', description: 'Understand cloud computing fundamentals.', color: 'purple', icon: '☁' },
+  { title: 'Cloud Concepts', description: 'Understand cloud computing fundamentals.', color: 'neutral', icon: '☁' },
   { title: 'Azure Architecture & Services', description: 'Explore Azure services and infrastructure.', color: 'blue', icon: '◇' },
   { title: 'Azure Management & Governance', description: 'Learn about cost, security, and governance.', color: 'orange', icon: '▦' },
 ]
 
 function App() {
   const [activePage, setActivePage] = useState('Dashboard')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [latestResult, setLatestResult] = useState(null)
   const { theme, toggleTheme } = useTheme()
   const {
@@ -30,10 +31,20 @@ function App() {
 
   const handleNavigation = (page) => setActivePage(page)
   const displayName = profile?.username || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || 'Learner'
+  const firstName = displayName.trim().split(/\s+/)[0]
+  const avatarUrl = user?.user_metadata?.avatar_url || user?.user_metadata?.picture
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar ${isSidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
+        <button
+          className="sidebar-toggle"
+          type="button"
+          onClick={() => setIsSidebarOpen((open) => !open)}
+          aria-label={`${isSidebarOpen ? 'Collapse' : 'Expand'} navigation sidebar`}
+          aria-expanded={isSidebarOpen}
+          title={`${isSidebarOpen ? 'Collapse' : 'Expand'} sidebar`}
+        >{isSidebarOpen ? '◀' : '▶'}</button>
         <button className="brand" type="button" onClick={() => handleNavigation('Dashboard')} aria-label="ExamPilot AI dashboard">
           <span className="brand-mark">E</span>
           <span className="brand-name">ExamPilot<span>AI</span></span>
@@ -45,10 +56,11 @@ function App() {
               className={`nav-item ${activePage === item.label ? 'active' : ''}`}
               key={item.label}
               onClick={() => handleNavigation(item.label)}
+              title={!isSidebarOpen ? item.label : undefined}
               aria-current={activePage === item.label ? 'page' : undefined}
             >
               <span className="nav-icon" aria-hidden="true">{item.icon}</span>
-              <span>{item.label}</span>
+              {isSidebarOpen && <span>{item.label}</span>}
             </button>
           ))}
         </nav>
@@ -60,10 +72,12 @@ function App() {
             <p>Small steps every day lead to big results.</p>
           </div>
           <div className="profile-summary" aria-live="polite">
-            <span className="avatar" aria-hidden="true">{user ? displayName.slice(0, 1).toUpperCase() : 'EP'}</span>
+            <span className="avatar" aria-hidden="true">
+              {user && avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : user ? displayName.slice(0, 1).toUpperCase() : 'EP'}
+            </span>
             <span className="profile-details">
               <strong>{user ? displayName : 'Practice workspace'}</strong>
-              <small>{status === 'loading' ? 'Checking sign-in…' : user ? 'Signed in with Google' : 'Guest session'}</small>
+              <small>{status === 'loading' ? 'Checking sign-in…' : user ? user.email || 'Signed in with Google' : 'Guest session'}</small>
             </span>
           </div>
         </div>
@@ -84,6 +98,17 @@ function App() {
               <span className="theme-toggle-icon" aria-hidden="true">{theme === 'dark' ? '☀' : '☾'}</span>
               <span>{theme === 'dark' ? 'Dark' : 'Light'} theme</span>
             </button>
+            {user && (
+              <div className="topbar-profile" aria-label="Signed-in profile">
+                <span className="avatar" aria-hidden="true">
+                  {avatarUrl ? <img src={avatarUrl} alt="" referrerPolicy="no-referrer" /> : displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="topbar-profile-details">
+                  <strong>{displayName}</strong>
+                  <small>{profileStatus === 'loading' ? 'Saving profile…' : user.email || 'Signed in'}</small>
+                </span>
+              </div>
+            )}
             {status === 'loading' ? (
               <span className="auth-status" role="status">Checking account…</span>
             ) : user ? (
@@ -107,7 +132,7 @@ function App() {
               </div>
             )}
             {user && profileStatus === 'loading' && <p role="status">Syncing your ExamPilot profile…</p>}
-            {user && profileStatus === 'ready' && <p role="status">Your ExamPilot profile is synced. Quiz history is not yet connected to learner accounts.</p>}
+            {user && profileStatus === 'ready' && <p role="status">Your ExamPilot profile is synced. Completed quiz history is saved to your account.</p>}
             {authError && <button type="button" className="auth-dismiss-button" onClick={clearAuthError}>Dismiss</button>}
           </section>
         )}
@@ -133,7 +158,7 @@ function App() {
               <section className="welcome-section">
                 <div>
                   <div className="eyebrow"><span className="eyebrow-dot" /> AZ-900 CERTIFICATION PREP</div>
-                  <h1>Make your next study session count.</h1>
+                  <h1>{user ? `Hello ${firstName}, let us practice for the AZ-900.` : 'Make your next study session count.'}</h1>
                   <p className="welcome-description">Practice from the question bank, then use your results to decide what to review next.</p>
                   <div className="welcome-actions">
                     <button className="quiz-primary-button" onClick={() => handleNavigation('Practice Hub')}>Start a practice session <span aria-hidden="true">→</span></button>

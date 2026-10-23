@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+import { apiFetch } from './api.js'
 
 export default function PerformanceSummary({ onOpenPerformance, onPractice }) {
   const [performance, setPerformance] = useState(null)
@@ -12,7 +11,7 @@ export default function PerformanceSummary({ onOpenPerformance, onPractice }) {
     async function loadSummary() {
       setStatus('loading')
       try {
-        const response = await fetch(`${API_BASE_URL}/attempts/performance/`, { signal: controller.signal })
+        const response = await apiFetch('/attempts/performance/', { signal: controller.signal })
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data.error || 'Your performance summary could not be loaded.')
         setPerformance(data)

@@ -64,6 +64,25 @@ class SupabaseProfileSyncTests(APITestCase):
         self.assertEqual(profile.username, "New Name")
         self.assertEqual(UserProfile.objects.count(), 1)
 
+    @override_settings(SUPABASE_URL="https://project.supabase.co", SUPABASE_ANON_KEY="public-anon-key")
+    @patch("api.views.urlopen")
+    def test_profile_sync_links_existing_email_profile_to_verified_supabase_uid(self, urlopen):
+        profile = UserProfile.objects.create(email="learner@example.com", username="Old Name")
+        urlopen.return_value = self.supabase_response({
+            "id": "verified-user-id",
+            "email": "learner@example.com",
+            "user_metadata": {"full_name": "A Learner"},
+        })
+
+        response = self.client.post(self.url, {}, format="json", HTTP_AUTHORIZATION="Bearer valid-token")
+
+        profile.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["created"])
+        self.assertEqual(profile.supabase_uid, "verified-user-id")
+        self.assertEqual(profile.username, "A Learner")
+        self.assertEqual(UserProfile.objects.count(), 1)
+
     @patch("api.views.urlopen")
     def test_profile_sync_requires_bearer_token_and_backend_configuration(self, urlopen):
         public_profile_list = self.client.get("/api/profiles/")
@@ -276,7 +295,7 @@ class ExplainAnswerApiTests(APITestCase):
         )
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-key")
+    @patch("api.views.os.environ.get", return_value="test-key")
     def test_generates_explanation_from_verified_question_and_answer(self, _getenv, groq):
         groq.return_value.chat.completions.create.return_value = self.completion(
             "Virtual Machines provide compute; DNS resolves names."
@@ -298,7 +317,7 @@ class ExplainAnswerApiTests(APITestCase):
         groq.assert_called_once_with(api_key="test-key", timeout=12.0, max_retries=0)
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-key")
+    @patch("api.views.os.environ.get", return_value="test-key")
     def test_explains_correct_answers_without_changing_correctness(self, _getenv, groq):
         groq.return_value.chat.completions.create.return_value = self.completion(
             "Virtual Machines supply compute capacity."
@@ -332,7 +351,7 @@ class ExplainAnswerApiTests(APITestCase):
         self.assertEqual(forged_correctness.status_code, 400)
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value=None)
+    @patch("api.views.os.environ.get", return_value=None)
     def test_missing_credentials_uses_stored_explanation(self, _getenv, groq):
         response = self.client.post(self.url, {"selected_answer": "B"}, format="json")
 
@@ -344,7 +363,7 @@ class ExplainAnswerApiTests(APITestCase):
         groq.assert_not_called()
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-key")
+    @patch("api.views.os.environ.get", return_value="test-key")
     def test_provider_failures_fall_back_without_leaking_errors_or_secrets(self, _getenv, groq):
         create = groq.return_value.chat.completions.create
         for provider_error in (TimeoutError("test-key timed out"), RuntimeError("rate limited")):
@@ -362,7 +381,7 @@ class ExplainAnswerApiTests(APITestCase):
                 self.assertEqual(response.data["explanation"], self.question.explanation)
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-key")
+    @patch("api.views.os.environ.get", return_value="test-key")
     def test_empty_or_invalid_provider_responses_use_fallback(self, _getenv, groq):
         create = groq.return_value.chat.completions.create
         for content in (None, "", "x" * 2001):
@@ -374,7 +393,7 @@ class ExplainAnswerApiTests(APITestCase):
                 self.assertEqual(response.data["source"], "stored")
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value=None)
+    @patch("api.views.os.environ.get", return_value=None)
     def test_missing_stored_explanation_has_safe_database_based_fallback(self, _getenv, groq):
         self.question.explanation = ""
         self.question.save(update_fields=["explanation"])
@@ -463,7 +482,7 @@ class LearningInsightsApiTests(APITestCase):
     def test_recommendations_ignore_fabricated_client_scores_and_need_no_key(self):
         self.create_attempt("Cloud Concepts", correct_count=0, missed_count=3, score=0)
 
-        with patch("api.views.os.getenv", return_value=None):
+        with patch("api.views.os.environ.get", return_value=None):
             response = self.client.post(
                 self.url,
                 {"topic_scores": {"Cloud Concepts": 100, "Fabricated Topic": 100}},
@@ -495,11 +514,15 @@ class LearningInsightsApiTests(APITestCase):
                 self.assertEqual(response.status_code, 400)
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-secret")
+    @patch("api.views.os.environ.get", return_value="test-secret")
     def test_ai_narrative_uses_persisted_topics_and_preserves_rule_results(self, _getenv, groq):
         self.create_attempt("Cloud Concepts", correct_count=1, missed_count=3, score=25)
         groq.return_value.chat.completions.create.return_value = SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content="Review Cloud Concepts next."))]
+            choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps({
+                "summary": "Review Cloud Concepts next.",
+                "focus_topic": "Cloud Concepts",
+                "next_steps": ["Review the concepts missed in your saved answers."],
+            })))]
         )
 
         response = self.client.post(self.url, {"topic_scores": {"Cloud Concepts": 100}}, format="json")
@@ -515,7 +538,7 @@ class LearningInsightsApiTests(APITestCase):
         groq.assert_called_once_with(api_key="test-secret", timeout=12.0, max_retries=0)
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-secret")
+    @patch("api.views.os.environ.get", return_value="test-secret")
     def test_ai_provider_errors_and_malformed_responses_return_rule_fallback(self, _getenv, groq):
         self.create_attempt("Cloud Concepts", correct_count=1, missed_count=3, score=25)
         create = groq.return_value.chat.completions.create
@@ -541,7 +564,7 @@ class LearningInsightsApiTests(APITestCase):
                 self.assertNotIn("test-secret", str(response.data))
 
     @patch("api.views.Groq")
-    @patch("api.views.os.getenv", return_value="test-secret")
+    @patch("api.views.os.environ.get", return_value="test-secret")
     def test_ai_is_not_called_when_topic_data_is_insufficient(self, _getenv, groq):
         self.create_attempt("Cloud Concepts", correct_count=1, missed_count=1, score=50)
 

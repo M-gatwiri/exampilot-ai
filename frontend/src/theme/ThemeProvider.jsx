@@ -50,7 +50,7 @@ export function ThemeProvider({ children }) {
     root.dataset.theme = theme
     root.style.colorScheme = theme
     document.querySelector('meta[name="theme-color"]')?.setAttribute(
-      'content', theme === 'dark' ? '#101b1a' : '#f3f6f2',
+      'content', theme === 'dark' ? '#09090b' : '#fafafa',
     )
   }, [theme])
 

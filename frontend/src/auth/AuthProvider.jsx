@@ -4,6 +4,17 @@ import { AuthContext } from './AuthContext.js'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
 
+function consumeOAuthError() {
+  const query = new URLSearchParams(window.location.search)
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const code = query.get('error') || hash.get('error')
+  if (!code) return ''
+  let description = query.get('error_description') || hash.get('error_description') || 'Google sign-in did not complete.'
+  try { description = decodeURIComponent(description) } catch { /* Keep the provider's original message. */ }
+  window.history.replaceState({}, document.title, window.location.pathname)
+  return `Google sign-in failed: ${description.replace(/\+/g, ' ')}`
+}
+
 async function syncProfile(accessToken) {
   let response
   try {
@@ -32,11 +43,12 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!supabase) return undefined
     let active = true
+    const oauthError = consumeOAuthError()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       if (!active) return
       setSession(nextSession)
       setStatus('ready')
-      setAuthError('')
+      setAuthError(nextSession?.access_token ? '' : oauthError)
       if (!nextSession?.access_token) {
         setProfileSync({ token: null, attempt: 0, status: 'idle', profile: null, error: '' })
       }
@@ -45,6 +57,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return
       if (error) setAuthError('Your saved session could not be restored. Please sign in again.')
+      else if (oauthError) setAuthError(oauthError)
       setSession(data?.session || null)
       if (!data?.session?.access_token) {
         setProfileSync({ token: null, attempt: 0, status: 'idle', profile: null, error: '' })
@@ -111,19 +124,32 @@ export function AuthProvider({ children }) {
     }
   }, [])
 
-  const value = useMemo(() => ({
-    user: session?.user || null,
-    status,
-    isConfigured: isSupabaseConfigured,
-    authError,
-    clearAuthError: () => setAuthError(''),
-    signInWithGoogle,
-    signOut,
-    profile,
-    profileStatus,
-    profileError,
-    retryProfileSync: () => setSyncAttempt((attempt) => attempt + 1),
-  }), [session, status, authError, signInWithGoogle, signOut, profile, profileStatus, profileError])
+  const value = useMemo(() => {
+    const sessionUser = session?.user
+    const metadata = sessionUser?.user_metadata || {}
+    const user = sessionUser ? {
+      ...sessionUser,
+      email: sessionUser.email || metadata.email || null,
+      user_metadata: {
+        ...metadata,
+        full_name: metadata.full_name || metadata.name || null,
+        avatar_url: metadata.avatar_url || metadata.picture || null,
+      },
+    } : null
+    return {
+      user,
+      status,
+      isConfigured: isSupabaseConfigured,
+      authError,
+      clearAuthError: () => setAuthError(''),
+      signInWithGoogle,
+      signOut,
+      profile,
+      profileStatus,
+      profileError,
+      retryProfileSync: () => setSyncAttempt((attempt) => attempt + 1),
+    }
+  }, [session, status, authError, signInWithGoogle, signOut, profile, profileStatus, profileError])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+import { apiFetch } from './api.js'
 
 function getOptions(options) {
   if (Array.isArray(options)) {
@@ -22,22 +21,24 @@ async function readResponse(response) {
   return data
 }
 
-export default function Quiz({ onExit, onComplete }) {
-  const [questions, setQuestions] = useState([])
+export default function Quiz({ onExit, onComplete, initialQuestions = null }) {
+  const hasInitialQuestions = Array.isArray(initialQuestions) && initialQuestions.length > 0
+  const [questions, setQuestions] = useState(() => initialQuestions || [])
   const [answers, setAnswers] = useState({})
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [status, setStatus] = useState('loading')
+  const [status, setStatus] = useState(hasInitialQuestions ? 'ready' : 'loading')
   const [error, setError] = useState('')
   const [validation, setValidation] = useState('')
   const [result, setResult] = useState(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
 
   useEffect(() => {
+    if (hasInitialQuestions) return undefined
     const controller = new AbortController()
 
     async function loadQuestions() {
       try {
-        const data = await readResponse(await fetch(`${API_BASE_URL}/questions/`, { signal: controller.signal }))
+        const data = await readResponse(await apiFetch('/questions/', { signal: controller.signal }))
         const list = Array.isArray(data) ? data : data.results
         if (!Array.isArray(list) || list.length === 0) {
           setError('No AZ-900 questions are available yet. Add questions to the backend question bank and try again.')
@@ -58,7 +59,7 @@ export default function Quiz({ onExit, onComplete }) {
 
     loadQuestions()
     return () => controller.abort()
-  }, [loadAttempt])
+  }, [loadAttempt, hasInitialQuestions])
 
   const currentQuestion = questions[currentIndex]
   const answeredCount = useMemo(() => Object.keys(answers).length, [answers])
@@ -81,7 +82,7 @@ export default function Quiz({ onExit, onComplete }) {
     setStatus('submitting')
     setError('')
     try {
-      const data = await readResponse(await fetch(`${API_BASE_URL}/attempts/submit_quiz/`, {
+      const data = await readResponse(await apiFetch('/attempts/submit_quiz/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers }),

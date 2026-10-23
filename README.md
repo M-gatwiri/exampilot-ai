@@ -1,94 +1,60 @@
 # ExamPilot AI
 
-## Local practice quiz
+ExamPilot AI is an AZ-900 practice app with a Django REST API, a React/Vite frontend, saved quiz history, Supabase Google sign-in, and optional Groq study guidance.
 
-The local frontend uses Vite to proxy `/api` requests to Django at `127.0.0.1:8000`. Run the backend with `config.settings_local` to use SQLite; this does not change the production database settings or require Supabase credentials.
+## Local setup (Windows PowerShell)
 
-1. In a terminal, create the backend environment if needed, then install dependencies and apply migrations:
+Use two terminals from the repository root. Install Python 3.10+ and Node.js 22.19+ (the locked frontend test dependencies require Node 22.19 or newer). The local Django settings use SQLite and allow the Vite development origin. Vite proxies `/api` to Django, so set `VITE_API_BASE_URL=/api` in `frontend/.env`.
 
-   ```powershell
-   cd backend
-   python -m venv .venv
-   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-   .\.venv\Scripts\python.exe manage.py migrate --settings=config.settings_local
-   ```
+### Backend
 
-2. Start Django in that terminal:
-
-   ```powershell
-   .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000 --settings=config.settings_local
-   ```
-
-3. In a second terminal, install frontend dependencies and start Vite:
-
-   ```powershell
-   cd frontend
-   npm.cmd install
-   npm.cmd run dev
-   ```
-
-4. Open the Vite URL shown in the terminal (normally `http://localhost:5173`) and choose **Practice quizzes**. The quiz reads questions already present in the local question bank; this setup does not seed or generate question data. To use a different API URL, set `VITE_API_BASE_URL` to its `/api` base URL before starting Vite.
-
-## Supabase Google sign-in
-
-The app remains usable as a guest without Supabase. To enable **Sign in with Google**:
-
-1. Copy `frontend/.env.example` to `frontend/.env`. Set `VITE_SUPABASE_URL` to the Supabase Project URL and `VITE_SUPABASE_ANON_KEY` to its publishable key (or legacy anon key). These are public client values; never put a service-role/secret key in a `VITE_` variable.
-2. Copy `backend/.env.example` to `backend/.env`. Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the same project URL and public key. The backend uses the signed-in access token to request the verified user identity from Supabase before syncing a profile.
-3. In Supabase, enable the Google provider with an OAuth client ID and client secret from your Google Cloud project. In Google Cloud, add `http://localhost:5173` as an authorized JavaScript origin and the callback URL shown in Supabase's Google provider settings as an authorized redirect URI.
-4. In Supabase **Authentication → URL Configuration**, set the local site URL to `http://localhost:5173` and add it to the allowed redirect URLs. If Vite uses another port, update both origins to match.
-5. Restart Django and Vite after changing the environment files. Supabase Auth restores browser sessions and refreshes tokens. The backend rejects profile sync without a valid bearer token and derives the profile ID, email, and name from Supabase's verified user response rather than browser-supplied identity fields.
-
-This integration syncs account profiles only. Quiz attempts, results, and learning insights still use the shared anonymous history. The backend does not provide per-account history or learner-specific authorization for those endpoints; sign-in must not be treated as privacy or access control for quiz data. The UI tells signed-in learners this after successful profile sync.
-
-## Quiz results and performance
-
-Submitting a quiz saves its score and a question-by-question answer snapshot on the attempt. **My performance** reads persisted anonymous attempts from `GET /api/attempts/performance/` for history, score trends, topic accuracy, and answer review. Signing in syncs a profile but does not associate attempts or provide per-account history; anonymous attempts cannot be separated by person, and profile-linked attempts are excluded from this endpoint. The API rejects client-supplied `supabase_uid` on quiz submission so a caller cannot misattribute an attempt to another profile. Existing attempts created before this feature remain in history; their question-level review and topic breakdown are unavailable because those answers were not previously stored. Topic accuracy and rule-based recommendations use saved answer snapshots; optional AI guidance can fail without hiding quiz results.
-
-## Learning explanations
-
-Answer review always shows the explanation saved with each question. Select **Explain my answer** to request a question-specific explanation from the backend Groq integration. The server uses the stored question, choices, correct answer, and selected option; the browser cannot supply correctness data or a custom prompt. Explanations are generated only when requested and do not affect quiz scoring. If Groq is not configured or unavailable, the saved explanation remains visible and is returned as a fallback.
-
-AI explanations are optional for local development. The existing backend reads `GROQ_API_KEY` from the backend process environment or `backend/.env` (loaded by `python-dotenv`). To enable them locally, add this line to `backend/.env` with your own key:
-
-```dotenv
-GROQ_API_KEY=your_groq_api_key
-```
-
-Do not add `.env` files or real API keys to source control. Without this variable, quiz submission, saved answer review, and performance history continue to work; the explanation action displays the stored question explanation.
-
-## Topic insights and recommendations
-
-**My performance** now includes a rule-based study plan calculated from saved question results. A topic is assessed after at least 3 saved answers: below 70% is a focus area, 70–79% is developing, and 80% or higher is a strength. Topics below the sample minimum are marked as needing more answers rather than being called weak. Topic changes compare the latest saved attempt for that topic with earlier saved answers when both samples contain at least 3 answers; a change over 5 percentage points is marked improving or declining.
-
-These rules and their recommendations work without AI. **Get study guidance** optionally asks the existing Groq service for a concise narrative based on the same server-calculated results; if `GROQ_API_KEY` is missing or Groq fails, the rule-based plan remains available. The request does not accept client scores as evidence.
-
-Topic insights use the same anonymous quiz attempts visible in shared history; they are not isolated to an individual account, even when the learner signs in. Attempts without saved question-level results cannot contribute to topic recommendations.
-
-## Git Bash commands on Windows
-
-The current checkout already has `backend/.venv` (Python 3.15.0rc3); reuse it rather than creating another environment. The Python launcher did not report a stable interpreter here. On a fresh setup, use an installed stable Python compatible with the Django version in `requirements.txt`.
-
-Copy `backend/.env.example` to `backend/.env` if needed, generate a fresh development secret with `python -c "import secrets; print(secrets.token_urlsafe(50))"`, and set `SECRET_KEY` in that file before starting Django. Keep `.env` files local; they are ignored by Git.
-
-Run these commands in two Git Bash terminals from the repository root:
-
-**Backend**
-
-```bash
+```powershell
 cd backend
-source .venv/Scripts/activate
-python -m pip install -r requirements.txt
-python manage.py migrate --settings=config.settings_local
-python manage.py runserver 127.0.0.1:8000 --settings=config.settings_local
+python -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+.\venv\Scripts\python.exe manage.py migrate --settings=config.settings_local
+.\venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000 --settings=config.settings_local
 ```
 
-**Frontend**
+If the repository's `backend/venv` already exists, reuse it. Copy `backend/.env.example` to `backend/.env` and set a development `SECRET_KEY` before starting Django. To enable signed-in profiles, set `SUPABASE_URL` and `SUPABASE_ANON_KEY` to the same Supabase project used by the frontend. Set `GROQ_API_KEY` to enable AI-generated study guidance and answer explanations. These variables are optional for local guest practice.
 
-```bash
+### Frontend
+
+```powershell
 cd frontend
 npm.cmd install
-npm.cmd run dev -- --host 127.0.0.1
+Copy-Item .env.example .env
+npm.cmd run dev
 ```
 
-Open `http://127.0.0.1:5173`; Django runs at `http://127.0.0.1:8000`. The Vite proxy forwards `/api` to Django. The practice quiz works in guest mode; Google sign-in and AI calls need their configured external services.
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `frontend/.env` to enable Google sign-in. These are public client values; do not put a service-role key in a `VITE_` variable. In Supabase, enable Google under **Authentication → Providers** and use the callback URL shown there as the authorized redirect URI in Google Cloud. Set the Supabase site URL and allowed redirect URL to `http://localhost:5173`. Open the Vite URL printed by the dev server (normally `http://localhost:5173`). The repository does not automatically seed the question bank; add questions before starting a practice quiz.
+
+## Authentication and profile sync
+
+Supabase restores the browser session and supplies an access token to Django. Django validates that token with Supabase before creating or updating the local `UserProfile` using the verified Supabase UID, email, and full name. The profile is synced on sign-in and is also resolved from the bearer token on authenticated API requests. Quiz attempts are saved against that profile, and the dashboard greets a signed-in learner by first name. Guests can practice too; their attempts remain anonymous and are isolated from signed-in account history.
+
+If Google sign-in returns `Unable to exchange external code`, confirm the Google OAuth client ID and secret configured in Supabase and that Google Cloud has the exact Supabase callback URL authorized. The callback URL is distinct from the app's post-login redirect URL.
+
+## Quiz history and study insights
+
+Quiz submissions save the score, correct-answer tally, timestamp, and question-level answer snapshot. **My performance** reads the signed-in user's saved attempts in chronological order; guest history is limited to that guest session's anonymous attempts. Topic accuracy, missed domains, strengths, and trends are calculated from saved answers. Attempts without answer snapshots remain visible but cannot contribute to topic analysis.
+
+The study guidance action sends no performance scores from the browser. Django builds the Groq prompt from the requesting user's saved attempts and missed question domains. When there is not enough saved data or Groq is unavailable, the API returns a rule-based response derived from the available history (or explains that more quiz data is needed); quiz results remain available. Groq calls require `GROQ_API_KEY` in `backend/.env` or the backend process environment.
+
+## Automated checks
+
+Run the backend API tests against the local test settings and the frontend checks from separate terminals:
+
+```powershell
+cd backend
+.\venv\Scripts\python.exe manage.py test api --settings=config.settings_local
+```
+
+```powershell
+cd frontend
+npm.cmd run test
+npm.cmd run lint
+npm.cmd run build
+```
+
+The Django test runner uses its test database and does not modify the local development database.

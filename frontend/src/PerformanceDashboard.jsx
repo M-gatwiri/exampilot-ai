@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { apiFetch } from './api.js'
 
 function optionLabel(options, key) {
   if (Array.isArray(options)) {
@@ -50,8 +49,8 @@ function AnswerExplanation({ item }) {
     setStatus('loading')
     setError('')
     try {
-      const data = await readResponse(await fetch(
-        `${API_BASE_URL}/questions/${item.question_id}/explain_answer/`,
+      const data = await readResponse(await apiFetch(
+        `/questions/${item.question_id}/explain_answer/`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -143,6 +142,7 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
   const [insightStatus, setInsightStatus] = useState('idle')
   const [insightError, setInsightError] = useState('')
   const [insights, setInsights] = useState('')
+  const [structuredInsights, setStructuredInsights] = useState(null)
   const [insightSource, setInsightSource] = useState('')
   const [insightNotice, setInsightNotice] = useState('')
   const [insightRetryable, setInsightRetryable] = useState(false)
@@ -156,7 +156,7 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
       setStatus('loading')
       setError('')
       try {
-        const data = await readResponse(await fetch(`${API_BASE_URL}/attempts/performance/`, { signal: controller.signal }))
+        const data = await readResponse(await apiFetch('/attempts/performance/', { signal: controller.signal }))
         setPerformance(data)
         setStatus('ready')
       } catch (loadError) {
@@ -193,22 +193,24 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
   const domains = performance?.domains || []
   const learningInsights = performance?.learning_insights
   const historyForChart = [...attempts].filter((attempt) => typeof attempt.score === 'number').reverse()
-  const canGetInsights = learningInsights?.status === 'ready'
+  const canGetInsights = attempts.length > 0
 
-  const requestInsights = async () => {
+  const requestInsights = useCallback(async () => {
     if (insightRequestInFlight.current || !canGetInsights) return
     insightRequestInFlight.current = true
     setInsightStatus('loading')
     setInsightError('')
     setInsightNotice('')
     setInsights('')
+    setStructuredInsights(null)
     try {
-      const data = await readResponse(await fetch(`${API_BASE_URL}/attempts/generate_insights/`, {
+      const data = await readResponse(await apiFetch('/attempts/generate_insights/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       }))
       setInsights(data.insights || '')
+      setStructuredInsights(data.structured_insights || null)
       setInsightSource(data.source || 'rules')
       setInsightNotice(data.notice || '')
       setInsightRetryable(Boolean(data.retryable))
@@ -221,7 +223,15 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
     } finally {
       insightRequestInFlight.current = false
     }
-  }
+  }, [canGetInsights])
+
+  useEffect(() => {
+    if (status === 'ready' && latestResult && canGetInsights && insightStatus === 'idle') {
+      const timer = window.setTimeout(() => requestInsights(), 0)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [status, latestResult, canGetInsights, insightStatus, requestInsights])
 
   const savedGuidanceOnly = insightStatus === 'ready' && insightSource === 'rules' && !insightRetryable
 
@@ -398,7 +408,17 @@ export default function PerformanceDashboard({ latestResult, onPractice }) {
                   {insightStatus === 'loading' && <p className="performance-muted" role="status">Preparing guidance from saved quiz results…</p>}
                   {insightError && <p className="performance-error-text" role="alert">{insightError}</p>}
                   {insightNotice && <p className="insight-notice" role="status">{insightNotice}</p>}
-                  {insights && <p className="insight-copy" aria-live="polite">{insights}</p>}
+                  {structuredInsights ? (
+                    <div className="insight-result" aria-live="polite">
+                      <p className="insight-copy">{structuredInsights.summary}</p>
+                      {structuredInsights.focus_topic && <p className="insight-focus"><strong>Focus:</strong> {structuredInsights.focus_topic}</p>}
+                      {structuredInsights.next_steps?.length > 0 && (
+                        <ol className="insight-next-steps">
+                          {structuredInsights.next_steps.map((step, index) => <li key={`${index}-${step}`}>{step}</li>)}
+                        </ol>
+                      )}
+                    </div>
+                  ) : insights && <p className="insight-copy" aria-live="polite">{insights}</p>}
                 </div>
               )}
             </section>

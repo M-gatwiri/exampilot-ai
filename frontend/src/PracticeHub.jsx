@@ -1,11 +1,45 @@
 import { useState } from 'react'
 import Quiz from './Quiz.jsx'
+import { apiFetch } from './api.js'
+
+async function readResponse(response) {
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(data.error || 'Question generation failed. Please try again.')
+  return data
+}
 
 export default function PracticeHub({ onComplete, onExit }) {
   const [quizStarted, setQuizStarted] = useState(false)
+  const [generatedQuestions, setGeneratedQuestions] = useState(null)
+  const [topic, setTopic] = useState('Azure Cloud Concepts')
+  const [questionCount, setQuestionCount] = useState(10)
+  const [generationStatus, setGenerationStatus] = useState('idle')
+  const [generationError, setGenerationError] = useState('')
+
+  const generateQuiz = async (event) => {
+    event.preventDefault()
+    setGenerationStatus('loading')
+    setGenerationError('')
+    try {
+      const data = await readResponse(await apiFetch('/questions/generate_ai/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, count: questionCount }),
+      }))
+      if (!Array.isArray(data.questions) || data.questions.length !== Number(questionCount)) {
+        throw new Error('The AI service returned an incomplete quiz. Please retry.')
+      }
+      setGeneratedQuestions(data.questions)
+      setQuizStarted(true)
+    } catch (error) {
+      setGenerationError(error.message || 'Question generation failed. Please try again.')
+    } finally {
+      setGenerationStatus('idle')
+    }
+  }
 
   if (quizStarted) {
-    return <Quiz onExit={() => setQuizStarted(false)} onComplete={onComplete} />
+    return <Quiz onExit={() => { setQuizStarted(false); setGeneratedQuestions(null) }} onComplete={onComplete} initialQuestions={generatedQuestions} />
   }
 
   return (
@@ -14,7 +48,7 @@ export default function PracticeHub({ onComplete, onExit }) {
         <div>
           <p className="section-kicker">PRACTICE HUB · AZ-900</p>
           <h1 id="practice-hub-title">Choose a focused practice session.</h1>
-          <p className="section-description">Work through questions from the current AZ-900 bank, then review your score and answers.</p>
+          <p className="section-description">Work through the question bank or generate a custom AI quiz, then review your score and answers.</p>
         </div>
       </header>
 
@@ -34,6 +68,27 @@ export default function PracticeHub({ onComplete, onExit }) {
           </div>
         </div>
       </article>
+
+      <form className="practice-session-card ai-quiz-form" onSubmit={generateQuiz}>
+        <div className="practice-session-mark" aria-hidden="true">✦</div>
+        <div className="practice-session-copy">
+          <span className="session-label">GROQ AI · CUSTOM PRACTICE</span>
+          <h2>Generate a focused quiz</h2>
+          <p>Choose a study topic and generate up to 60 fresh questions for your next session.</p>
+          <label htmlFor="ai-quiz-topic">Topic</label>
+          <input id="ai-quiz-topic" value={topic} onChange={(event) => setTopic(event.target.value)} maxLength={160} required />
+          <label htmlFor="ai-quiz-count">Number of questions</label>
+          <select id="ai-quiz-count" value={questionCount} onChange={(event) => setQuestionCount(Number(event.target.value))}>
+            {[5, 10, 15, 20, 30, 45, 60].map((count) => <option key={count} value={count}>{count}</option>)}
+          </select>
+          <div className="practice-session-actions">
+            <button className="quiz-primary-button" type="submit" disabled={generationStatus === 'loading'}>
+              {generationStatus === 'loading' ? 'Generating quiz…' : 'Generate AI quiz'}
+            </button>
+          </div>
+          {generationError && <p className="quiz-inline-error" role="alert">{generationError}</p>}
+        </div>
+      </form>
 
       <section className="practice-topic-section" aria-labelledby="practice-topics-title">
         <p className="section-kicker">AZ-900 EXAM AREAS</p>
